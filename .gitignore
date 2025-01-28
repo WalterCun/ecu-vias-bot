@@ -89,3 +89,4 @@ volumes/
 *.swn
 
 /viasec_bot
+src/translations/*.json
