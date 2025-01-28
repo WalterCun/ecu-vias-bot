@@ -1,7 +1,5 @@
 """ main.py """
 import logging
-# import tracemalloc
-
 from src.bot import start_bot
 
 # Enable logging
@@ -16,7 +14,5 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
-    # tracemalloc.start()
     start_bot()
-    # snapshot = tracemalloc.take_snapshot()
-    # top_stats = snapshot.statistics('lineno')
+
