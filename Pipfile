@@ -18,6 +18,8 @@ beautifulsoup4 = "*"
 selenium = "*"
 lxml = "*"
 html5lib = "*"
+tomlkit = "*"
+pytz = "*"
 
 [dev-packages]
 

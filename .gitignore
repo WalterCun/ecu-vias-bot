@@ -90,3 +90,4 @@ volumes/
 
 /viasec_bot
 src/translations/*.json
+.env

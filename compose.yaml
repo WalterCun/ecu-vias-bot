@@ -15,15 +15,23 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
 
-  selenium:
-    image: selenium/standalone-chrome
-    volumes:
-      - /dev/shm:/dev/shm
+  redis:
+    image: redis:latest
+    container_name: redis
     ports:
-      - 4444:4444
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
 
 volumes:
-  db_data: { }
+  redis_data:
+
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
