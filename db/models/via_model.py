@@ -11,8 +11,8 @@ class Vias(Model):
     province = CharField(max_length=50)
     via = fields.CharField(max_length=100)
     state = CharField(max_length=50)
-    observations = TextField()
-    alternate_via = TextField()
+    observations = TextField(null=True)
+    alternate_via = TextField(null=True)
     extraction_datetime = fields.DatetimeField(auto_now_add=True)
     page_datetime = fields.DatetimeField(null=True)
 

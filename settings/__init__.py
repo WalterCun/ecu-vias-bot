@@ -49,9 +49,14 @@ class Settings(BaseSettings):
     CACHE_FILE: str
     CACHE_TIME_EXPIRATION: int = 3600
 
+    # consts
     ONCE_A_DAY: dict[str, time] = {
         f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}": time(hour=hour) for hour in range(24)
     }
+
+    # Sync DB
+    SYNCDB_REFRESH_TIME: int = 5
+    SYNCDB_TIME: int = 30
 
     class Config:
         """
