@@ -1,8 +1,7 @@
 """src/config/settings.py"""
-
+from datetime import time
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from datetime import time
 
 
 class Settings(BaseSettings):
@@ -19,7 +18,8 @@ class Settings(BaseSettings):
         UNSUBSCRIPTION (int): Index for the unsubscription type.
         CONFIG (int"""
     DEBUG: bool
-    BASE_DIR: Path = Path(__file__).parent.parent.parent
+    BASE_DIR: Path = Path(__file__).parent.parent
+
     # Fluid
     LOCALES_PATH: Path = BASE_DIR / 'src' / 'controller' / 'languages' / 'langs'
 
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     DB_NAME: str = 'ecuavias.db'
     DATABASE_URL: str = f'sqlite://{BASE_DIR / DB_NAME}'
-    REDIS_URL: str = 'redis://localhost:6379/0' # Opcional
+    REDIS_URL: str = 'redis://localhost:6379/0'  # Opcional
 
     # Bot Telegram
     TELEGRAM_KEY_BOT: str
@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     DAYS_TO_KEEP_DATA: str
 
     # Cache Requests
-    CACHE_FILE: str
-    CACHE_TIME_EXPIRATION: int = 3600
+    CACHE_NAME:str
+    CACHE_TIME_EXPIRATION: int = 1800
 
     # consts
     ONCE_A_DAY: dict[str, time] = {
@@ -66,11 +66,12 @@ class Settings(BaseSettings):
         Attributes:
             env_file (str): The name of the environment file to load.
         """
-        env_file = str(Path(__file__).parent.parent.parent / ".env")
+        env_file = str(Path(__file__).parent.parent / ".env")
+        print(env_file)
 
 
 settings = Settings()
 
 if __name__ == '__main__':
-    print(settings.ONCE_A_DAY
-          )
+    print(settings.BASE_DIR)
+    # print(str(Path(__file__).parent.parent / ".env"))
