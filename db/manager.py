@@ -19,61 +19,50 @@ Update the `DATABASE_CONFIG` dictionary as needed to reflect the appropriate set
 for your database type and connection details.
 
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta
+from time import sleep
 
-from tortoise import Tortoise
+import pytz
 
-from src.db.models import Vias
-from src.scraper.web_scraper import ViasEcuadorScraper
-from src.settings import settings
+from db.models import Vias
+from services.api import ViasEcuadorAPI
+from settings import settings
+
+from colorama import Fore, init
+
+init(autoreset=True)
 
 logger = logging.getLogger(__name__)
 
-DATABASE_CONFIG = {
-    "connections": {
-        # "default": "sqlite://test.db"  # Cambia a PostgreSQL/MySQL si lo necesitas
-        # "default": f'sqlite://{settings.BASE_DIR / settings.DB_NAME}'
-        "default": settings.DATABASE_URL
-    },
-    "apps": {
-        "models": {
-            # "models": ["post_model", "aerich.models"],  # Tu archivo de modelo
-            "models": ['src.db.models'],  # Tu archivo de modelo
-            "default_connection": "default",
-        }
-    },
-}
 
-
-async def init():
-    """
-    Initializes the Tortoise ORM and generates database schemas asynchronously.
-
-    This function sets up the ORM by initializing it with the provided database configuration
-    and then generates the necessary schemas for the database according to the defined models.
-
-    Raises:
-        ConfigurationError: If the provided database configuration is invalid.
-        OperationalError: If there is an issue connecting to the database.
-    """
-    await Tortoise.init(config=DATABASE_CONFIG)
-    await Tortoise.generate_schemas()
-
-
-async def close_db():
-    """
-    Closes all database connections managed by Tortoise ORM.
-
-    This asynchronous function ensures that all active database connections are
-    properly closed. It is used to clean up resources when the application shuts
-    down or when database connections need to be explicitly terminated.
-
-    Raises:
-        TortoiseException: If there is an issue during connection closure.
-    """
-    await Tortoise.close_connections()
+# async def init():
+#     """
+#     Initializes the Tortoise ORM and generates database schemas asynchronously.
+#
+#     This function sets up the ORM by initializing it with the provided database configuration
+#     and then generates the necessary schemas for the database according to the defined models.
+#
+#     Raises:
+#         ConfigurationError: If the provided database configuration is invalid.
+#         OperationalError: If there is an issue connecting to the database.
+#     """
+#     await Tortoise.init(config=DATABASE_CONFIG)
+#     await Tortoise.generate_schemas()
+#
+#
+# async def close_db():
+#     """
+#     Closes all database connections managed by Tortoise ORM.
+#
+#     This asynchronous function ensures that all active database connections are
+#     properly closed. It is used to clean up resources when the application shuts
+#     down or when database connections need to be explicitly terminated.
+#
+#     Raises:
+#         TortoiseException: If there is an issue during connection closure.
+#     """
+#     await Tortoise.close_connections()
 
 
 async def sync_db():
@@ -87,47 +76,68 @@ async def sync_db():
     Raises:
         None
     """
-    logger.info('Inicializar base de datos')
-    await init()
+    # Definir la zona horaria de Ecuador
+    ecuador_tz = pytz.timezone('America/Guayaquil')
 
     logger.info('Obtener hora por default cuando la base esta vacia')
-    ahora = datetime.now()
+    ahora = datetime.now(ecuador_tz)
+    # ahora = datetime.now(ecuador_tz)
     last_request = await Vias.filter().order_by("-extraction_datetime").first()
-    last_request = last_request.extraction_datetime if last_request else datetime(ahora.year, ahora.month, 1)
+    last_request = last_request.extraction_datetime_ec if last_request else datetime(ahora.year, ahora.month, 1)
+
+    if last_request:
+        last_request = last_request.astimezone(ecuador_tz)  # Asegurar que sea aware y en UTC
+    else:
+        last_request = datetime(ahora.year, ahora.month, 1, tzinfo=ecuador_tz)
 
     logger.info('Crear instancias de ViasEcuadorScraper ')
-    scraper = ViasEcuadorScraper()
+    api = ViasEcuadorAPI()
 
     while True:
-        now = datetime.now().date()
-        logger.warning(f">> Revisando la base de datos... {now}")
+        now = datetime.now(ecuador_tz)
+        logger.warning(Fore.BLUE + f">> Revisando la base de datos... {now}")
 
-        logger.info(f'last_request: {now - last_request} > {settings.SYNCDB_TIME} : {(now - last_request) > timedelta(seconds=settings.SYNCDB_TIME)}')
+        logger.warning(
+            Fore.WHITE + f'last_request: {now - last_request} > {settings.SYNCDB_TIME} : {(now - last_request) > timedelta(seconds=settings.SYNCDB_TIME)}')
+
         if (now - last_request) > timedelta(seconds=settings.SYNCDB_TIME):
-            consult, data = scraper.get_states_vias()
+            data = api.get_states_vias()
+            for row in data:
 
-            data = data.to_dict('records')
-            print(data)
-            #
-            # if consult or data:
-            #     await Vias.create(
-            #         province=
-            #         via =
-            #     state =
-            #     observations =
-            #     alternate_via =
-            #
-            #     page_datetime
-            #     )
+                via = await Vias.filter(province=row.get('Provincia', {}).get('descripcion'),
+                                        via=row.get('descripcion')).first()
 
-
-
-
+                if via is not None and (
+                        via.state != row.get('EstadoActual', {}).get('nombre') or via.observations != row.get(
+                    'observaciones')):
+                    logger.warning(Fore.GREEN + 'Registro Encontrado, proceder a actualizar informacion')
+                    await Vias.filter(id=via.id).update(
+                        state=row.get('EstadoActual', {}).get('nombre'),
+                        observations=row.get('observaciones'),
+                        alternate_via=row.get('DetalleViaAlterna')[0].get('Via', {}).get('descripcion') if row.get(
+                            'DetalleViaAlterna') else None,
+                        extraction_datetime=now,
+                    )
+                elif via is not None and (
+                        via.state == row.get('EstadoActual', {}).get('nombre') or via.observations == row.get(
+                    'observaciones')):
+                    logger.warning(Fore.BLUE + f'No hay cambios.....')
+                    continue
+                else:
+                    logger.warning(Fore.RED + f'Ingresando registro: {via}')
+                    await Vias.create(
+                        province=row.get('Provincia', {}).get('descripcion'),
+                        via=row.get('descripcion'),
+                        state=row.get('EstadoActual', {}).get('nombre'),
+                        observations=row.get('observaciones'),
+                        alternate_via=row.get('DetalleViaAlterna')[0].get('Via', {}).get('descripcion') if row.get(
+                            'DetalleViaAlterna') else None,
+                    )
 
             last_request = now
 
-            logger.warning(f">> Base de datos actualizada: ")
-            await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
+        logger.warning(Fore.BLUE + f">> Base de datos actualizada: ")
+        sleep(settings.SYNCDB_REFRESH_TIME)
 
-if __name__ == '__main__':
-    asyncio.run(sync_db())
+# if __name__ == '__main__':
+#     asyncio.run(sync_db())
