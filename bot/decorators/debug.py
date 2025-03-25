@@ -2,7 +2,7 @@
 """ debug.py """
 import inspect
 
-from src.settings.config import settings
+from settings import settings
 
 
 def print_result(func):

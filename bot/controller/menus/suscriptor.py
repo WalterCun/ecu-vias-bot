@@ -1,12 +1,12 @@
 from telegram import ReplyKeyboardMarkup
 
-from src.controller.languages.translations import language
-from src.controller.utils.assamble_keyboard_menu import MenuOption, assemble_keyboard, KeyboardType
+from bot.controller.utils.assamble_keyboard_menu import MenuOption, assemble_keyboard, KeyboardType
 
 __all__ = ['suscriptor_menu']
 
-from src.controller.utils.cheack_options_buttons import cheack_options
-from src.settings.const import PROVINCES
+from bot.controller.utils.cheack_options_buttons import cheack_options
+from bot.translations.core import translate
+from settings.const import PROVINCES
 
 
 def suscriptor_menu(subscribed: list = None, hide_keyboard=False) -> ReplyKeyboardMarkup:
@@ -16,7 +16,7 @@ def suscriptor_menu(subscribed: list = None, hide_keyboard=False) -> ReplyKeyboa
     :return: A ReplyKeyboardMarkup object containing the subscriber menu options.
     """
     actions = {
-        language.general_msm_continue: MenuOption(0)
+        translate.general_msm_continue: MenuOption(0)
                }
     row_count = 1
     for province_index, province in enumerate(PROVINCES):

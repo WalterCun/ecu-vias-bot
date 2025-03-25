@@ -5,8 +5,8 @@ import json
 import logging
 from pathlib import Path
 
-from src.settings import settings
-from src.translations.libre_translate import LibreTranslate
+from settings import settings
+from bot.translations.libre_translate import LibreTranslate
 
 logger = logging.getLogger(__name__)
 
@@ -226,5 +226,4 @@ if __name__ == '__main__':
     translate.set_language("es")
     print(translate.greetings)
 
-    translate.auto_translate("es",
-                             ["en"])
+    translate.auto_translate("es", ["en"])

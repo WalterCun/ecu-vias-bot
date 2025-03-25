@@ -2,7 +2,7 @@
 """ libre_translate.py """
 import requests
 
-from src.settings.const import HEADERS
+from settings.const import HEADERS
 
 
 class LibreTranslate:

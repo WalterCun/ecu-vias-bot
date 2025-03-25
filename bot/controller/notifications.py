@@ -5,15 +5,14 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from src.controller.jobs import remove_job_if_exists
-from src.controller.languages.translations import language
-from src.controller.menus.initial import initial_menu
-from src.controller.menus.notifications import notification_menu_times
-from src.controller.utils.assemble_text import assemble_text
-from src.controller.utils.clean_text import clean_text
-from src.scraper.db import Database
-from src.settings.config import settings
-from src.settings.const import ONCE_A_DAY
+from bot.controller.jobs import remove_job_if_exists
+from bot.controller.menus.initial import initial_menu
+from bot.controller.menus.notifications import notification_menu_times
+from bot.controller.utils.assemble_text import assemble_text
+from bot.controller.utils.clean_text import clean_text
+
+from bot.translations.core import translate
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +85,9 @@ async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         try:
             times = context.user_data.setdefault('times', [])
             # Eliminar los tiempos que no corresponden al origen
-            times = [time for time in times if time in ONCE_A_DAY.keys()]
-            context.user_data['times'] = times
+            # times = [time for time in times if time in ONCE_A_DAY.keys()]
+            # context.user_data['times'] = times
+            context.user_data['times'] = 'times'
         except Exception as e:
             logger.error(f"Error al configurar notificaciones: {e}")
             await update.message.reply_text(
@@ -161,7 +161,7 @@ async def alarm_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if time in times:
         times.remove(time)
-    elif time != clean_text(language.general_msm_programming):
+    elif time != clean_text(translate.general_msm_programming):
         times.append(time)
 
     context.user_data['times'] = times
@@ -172,7 +172,8 @@ async def alarm_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
         format_24 = [t for t in times if any(p in t for p in ["AM", "PM"])]
 
         if format_24:
-            clock = ONCE_A_DAY[time]
+            # clock = ONCE_A_DAY[time]
+            clock = "ONCE_A_DAY[time]"
             context.job_queue.run_daily(alarm, clock, chat_id=chat_id, name=str(chat_id), data=clock)
             del context.user_data['times']
             context.user_data['alarms'] = [times]
@@ -236,23 +237,23 @@ async def alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
     Args:
         context: The context object containing the user data.
     """
-    db = Database()
     provinces = context.user_data['provinces']
     job = context.job
 
     if provinces:
         for prov in provinces:
-            for _, via in db.fetch_all('vias_ec', f'provincia = "{prov}"').iterrows():
-                information = assemble_text(language.general_msg_vias,
-                                            province=via['Provincia'],
-                                            via=via['Vía'],
-                                            state=via['Estado'],
-                                            observation=via['Observaciones'])
-
-                await context.bot.send_message(job.chat_id, text=information, parse_mode=ParseMode.MARKDOWN)
-
+            # for _, via in db.fetch_all('vias_ec', f'provincia = "{prov}"').iterrows():
+            #     information = assemble_text(translate.general_msg_vias,
+            #                                 province=via['Provincia'],
+            #                                 via=via['Vía'],
+            #                                 state=via['Estado'],
+            #                                 observation=via['Observaciones'])
+            #
+            #     await context.bot.send_message(job.chat_id, text=information, parse_mode=ParseMode.MARKDOWN)
+            print(prov)
+            pass
         info_oficial = assemble_text(
-            language.general_msg_info_oficial,
+            translate.general_msg_info_oficial,
             description_url='ECU911 Consulta de vias',
             url=settings.URL
         )

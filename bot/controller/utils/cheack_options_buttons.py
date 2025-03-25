@@ -1,4 +1,4 @@
-from src.controller.utils.assamble_keyboard_menu import MenuOption
+from bot.controller.utils.assamble_keyboard_menu import MenuOption
 
 
 def cheack_options(options: str, row_count: int, data: list = None):

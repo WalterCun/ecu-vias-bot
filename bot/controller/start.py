@@ -4,10 +4,9 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.controller.languages.translations import language
-from src.controller.menus.initial import initial_menu
-from src.controller.utils.assemble_text import assemble_text
-from src.settings.config import settings
+from bot.controller.menus.initial import initial_menu
+from bot.controller.utils.assemble_text import assemble_text
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +78,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         context.user_data.setdefault('language', lang)
 
         # Cargar traducciones según el idioma del usuario
-        language.load_translations(lang)
+        translate.load_translations(lang)
 
         # Enviar mensaje de bienvenida y menú inicial
-        welcome_message = assemble_text(language.general_start,
-                                        user=update.effective_user.first_name) + "\n\n" + language.general_select_option
+        welcome_message = assemble_text(translate.general_start,
+                                        user=update.effective_user.first_name) + "\n\n" + translate.general_select_option
         await update.message.reply_text(welcome_message, reply_markup=initial_menu())
 
     except Exception as e:

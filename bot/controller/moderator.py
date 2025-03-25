@@ -3,9 +3,10 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.controller.languages.translations import language
-from src.controller.menus.suscriptor import suscriptor_menu
-from src.settings.config import settings
+
+from bot.controller.menus.suscriptor import suscriptor_menu
+from bot.translations.core import translate
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +55,16 @@ async def moderator(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     logger.info(f"Leer instruccion: {text}")
 
     try:
-        if text == language.menu_buttons_subscribe:
+        if text == translate.menu_buttons_subscribe:
             provinces = context.user_data.get('provinces', None)
-            await update.message.reply_text(language.general_subscribe, reply_markup=suscriptor_menu(provinces))
+            await update.message.reply_text(translate.general_subscribe, reply_markup=suscriptor_menu(provinces))
             return settings.SUBSCRIPTION
 
-        if text == language.menu_buttons_unsubscribe:
+        if text == translate.menu_buttons_unsubscribe:
             await update.message.reply_text(f"{text.lower()}")
             return settings.UNSUBSCRIPTION
 
-        if text == language.menu_buttons_settings:
+        if text == translate.menu_buttons_settings:
             await update.message.reply_text(f"{text.lower()}")
             return settings.CONFIG
 
