@@ -10,6 +10,8 @@ from telegram.ext import ApplicationBuilder, ConversationHandler, CommandHandler
 from tortoise import Tortoise, run_async
 from colorama import init
 
+from bot.libs.translate import trans
+
 init(autoreset=True)
 
 from bot.controller.start import start
@@ -21,9 +23,9 @@ from bot.controller.subscription import subscription
 from bot.controller.unsubscription import unsubscription
 from bot.controller.utils.clean_text import clean_text
 from bot.libs.redis_persistence import RedisPersistence
-from bot.translations.core import translate
-from db.manager import sync_db
-from settings import settings
+
+from bot.db.manager import sync_db
+from bot.settings import settings
 
 # Enable logging
 logging.basicConfig(
@@ -39,13 +41,13 @@ logger = logging.getLogger(__name__)
 DATABASE_CONFIG = {
     "connections": {
         # "default": "sqlite://test.db"  # Cambia a PostgreSQL/MySQL si lo necesitas
-        # "default": f'sqlite://{settings.BASE_DIR / settings.DB_NAME}'
-        "default": settings.DATABASE_URL
+        "default": f'sqlite://{settings.BASE_DIR / settings.DB_NAME}'
+        # "default": str(settings.BASE_DIR / settings.DB_NAME)
     },
     "apps": {
         "models": {
             # "models": ["post_model", "aerich.models"],
-            "models": ['db.models'],
+            "models": ['bot.db.models'],
             "default_connection": "default",
         }
     },
@@ -110,7 +112,7 @@ def main():
             settings.UNSUBSCRIPTION: [MessageHandler(filters.TEXT, unsubscription)],
             settings.CONFIG: [MessageHandler(filters.TEXT, config)],
         },
-        fallbacks=[MessageHandler(filters.Regex(f"^{clean_text(translate.menu_buttons_stop)}$"), cancel)],
+        fallbacks=[MessageHandler(filters.Regex(f"^{trans.menu_buttons_stop}$"), cancel)],
     )
 
     app.add_handler(conv_handler)
