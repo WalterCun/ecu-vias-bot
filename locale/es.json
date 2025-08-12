@@ -1,0 +1,12 @@
+{
+    "start": {
+        "start": {
+            "welcome": "¡Hola {user}! Bienvenido a Vías EC."
+        },
+        "description_welcome": "Key no Implemented"
+    },
+    "menu_buttons_stop": "Key no Implemented",
+    "menu_buttons_subscribe": {
+        "to_dict": "Key no Implemented"
+    }
+}
