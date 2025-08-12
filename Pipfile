@@ -20,6 +20,7 @@ lxml = "*"
 html5lib = "*"
 tomlkit = "*"
 pytz = "*"
+translation-tools = {git = "https://github.com/WalterCun/ToolsTranslator.git"}
 
 [dev-packages]
 
