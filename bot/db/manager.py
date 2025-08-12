@@ -25,9 +25,9 @@ from time import sleep
 
 import pytz
 
-from db.models import Vias
-from services.api import ViasEcuadorAPI
-from settings import settings
+from bot.db.models import Vias
+from bot.services.api import ViasEcuadorAPI
+from bot.settings import settings
 
 from colorama import Fore, init
 
