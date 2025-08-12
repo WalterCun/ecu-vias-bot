@@ -1,8 +1,8 @@
 from requests_cache import CachedSession
 
-from services.structs.viasec import vias_ec_to_dict, vias_ec_from_dict
-from settings import settings
-from settings.const import HEADERS
+from bot.services.structs.viasec import vias_ec_to_dict, vias_ec_from_dict
+from bot.settings import settings
+from bot.settings.const import HEADERS
 
 
 class ViasEcuadorAPI:
