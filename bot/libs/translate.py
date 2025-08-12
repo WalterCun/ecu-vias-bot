@@ -11,7 +11,7 @@ trans = Translator(
     translations_dir=Path(settings.BASE_DIR) / 'locale',
     default_lang='es',
     nested=True,
-    auto_add_missing_keys=True
+    auto_add_missing_keys=False
 )
 
 # if __name__ == '__main__':

@@ -16,7 +16,7 @@ def suscriptor_menu(subscribed: list = None, hide_keyboard=False) -> ReplyKeyboa
     :return: A ReplyKeyboardMarkup object containing the subscriber menu options.
     """
     actions = {
-        trans.general_msm_continue: MenuOption(0)
+        trans.suscriptor.sms_continue: MenuOption(0)
                }
     row_count = 1
     for province_index, province in enumerate(PROVINCES):

@@ -1,13 +1,11 @@
 """ main.py """
 import asyncio
 import logging
-import threading
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ConversationHandler, CommandHandler, filters, MessageHandler
 
-# noinspection PyProtectedMember
-from tortoise import Tortoise, run_async
+from tortoise import Tortoise, connections
 from colorama import init
 
 from bot.libs.translate import trans
@@ -21,7 +19,6 @@ from bot.controller.moderator import moderator
 from bot.controller.notifications import notifications, alarm_notifications
 from bot.controller.subscription import subscription
 from bot.controller.unsubscription import unsubscription
-from bot.controller.utils.clean_text import clean_text
 from bot.libs.redis_persistence import RedisPersistence
 
 from bot.db.manager import sync_db
@@ -95,7 +92,12 @@ def main():
         Exception: An exception will propagate if initialization or application setup fails.
     """
     # Init database connect
-    run_async(init_db())
+    # run_async(init_db())
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(init_db())
+    finally:
+        loop.run_until_complete(connections.close_all(discard=True))
 
     persistence = RedisPersistence(settings.REDIS_URL)
     # Crear la aplicación del bot
@@ -112,14 +114,14 @@ def main():
             settings.UNSUBSCRIPTION: [MessageHandler(filters.TEXT, unsubscription)],
             settings.CONFIG: [MessageHandler(filters.TEXT, config)],
         },
-        fallbacks=[MessageHandler(filters.Regex(f"^{trans.menu_buttons_stop}$"), cancel)],
+        fallbacks=[MessageHandler(filters.Regex(f"^{trans.main.menu.btns.stop}$"), cancel)],
     )
 
     app.add_handler(conv_handler)
     logger.info("Iniciando Ejecucion de @ViasEC_bot")
 
     # Crear un segundo hilo para la limpieza de la base de datos
-    # asyncio.create_task(sync_db())
+    asyncio.create_task(sync_db())
 
     try:
         app.run_polling(allowed_updates=Update.ALL_TYPES)

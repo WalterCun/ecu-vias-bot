@@ -15,8 +15,8 @@ def initial_menu() -> ReplyKeyboardMarkup:
         ReplyKeyboardMarkup: The initial menu keyboard markup.
 
     """
-    actions = {trans.menu_buttons_subscribe: MenuOption(row=0),
-               trans.menu_buttons_unsubscribe: MenuOption(row=0),
-               trans.menu_buttons_settings: MenuOption(row=1),
-               trans.menu_buttons_stop: MenuOption(row=1)}
+    actions = {f"{trans.moderator.menu.btns.subscribe}": MenuOption(row=0),
+               f"{trans.moderator.menu.btns.unsubscribe}": MenuOption(row=0),
+               f"{trans.moderator.menu.btns.settings}": MenuOption(row=1),
+               f"{trans.moderator.menu.btns.stop}": MenuOption(row=1)}
     return assemble_keyboard(actions, KeyboardType.KEYBOARD)

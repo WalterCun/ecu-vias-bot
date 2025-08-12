@@ -1,12 +1,23 @@
 {
-    "start": {
-        "start": {
-            "welcome": "¡Hola {user}! Bienvenido a Vías EC."
-        },
-        "description_welcome": "Key no Implemented"
-    },
-    "menu_buttons_stop": "Key no Implemented",
-    "menu_buttons_subscribe": {
-        "to_dict": "Key no Implemented"
+  "start": {
+    "welcome": "¡Hola {user}! Bienvenido a Vías EC.",
+    "description": "Un asistente que te mantendrá informado sobre el estado de las vías en Ecuador y las últimas novedades sobre el tránsito\n\nSelecciona una opción:"
+  },
+  "moderator": {
+      "menu": {
+        "btns": {
+          "subscribe": "\uD83D\uDCBE SUSCRIBIRSE \uD83D\uDCBE",
+          "unsubscribe": "\uD83D\uDDD1\uFE0F DESUSCRIBIRSE \uD83D\uDDD1\uFE0F",
+          "settings": "⚙\uFE0F CONFIGURACIONES ⚙\uFE0F",
+          "stop":"\uD83D\uDD12 DETENER \uD83D\uDD12"
+        }
+      }
+  },
+  "main": {
+    "menu": {
+      "btns": {
+        "stop": "El sistema se ha detenido... Espero que vuelvas pronto."
+      }
     }
+  }
 }
