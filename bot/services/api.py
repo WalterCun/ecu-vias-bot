@@ -1,6 +1,5 @@
 from requests_cache import CachedSession
 
-from bot.services.structs.viasec import vias_ec_to_dict, vias_ec_from_dict
 from bot.settings import settings
 from bot.settings.const import HEADERS
 
@@ -28,6 +27,6 @@ class ViasEcuadorAPI:
         return None
 
 
-if __name__ == '__main__':
-    api = ViasEcuadorAPI()
-    print(api.get_states_vias())
+# if __name__ == '__main__':
+#     api = ViasEcuadorAPI()
+#     print(api.get_states_vias())
