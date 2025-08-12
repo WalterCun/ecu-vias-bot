@@ -18,7 +18,7 @@ class Settings(BaseSettings):
         UNSUBSCRIPTION (int): Index for the unsubscription type.
         CONFIG (int"""
     DEBUG: bool
-    BASE_DIR: Path = Path(__file__).parent.parent
+    BASE_DIR: Path = Path(__file__).parent.parent.parent
 
     # Fluid
     LOCALES_PATH: Path = BASE_DIR / 'src' / 'controller' / 'languages' / 'langs'
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # Sync DB
     SYNCDB_REFRESH_TIME: int = 5
-    SYNCDB_TIME: int = 30
+    SYNCDB_TIME: int = 60*60
 
     class Config:
         """
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
         Attributes:
             env_file (str): The name of the environment file to load.
         """
-        env_file = str(Path(__file__).parent.parent / ".env")
+        env_file = str(Path(__file__).parent.parent.parent / ".env")
         print(env_file)
 
 
