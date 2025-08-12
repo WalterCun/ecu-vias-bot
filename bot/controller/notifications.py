@@ -10,9 +10,9 @@ from bot.controller.menus.initial import initial_menu
 from bot.controller.menus.notifications import notification_menu_times
 from bot.controller.utils.assemble_text import assemble_text
 from bot.controller.utils.clean_text import clean_text
+from bot.libs.translate import trans
 
-from bot.translations.core import translate
-from settings import settings
+from bot.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ async def alarm_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if time in times:
         times.remove(time)
-    elif time != clean_text(translate.general_msm_programming):
+    elif time != clean_text(trans.general_msm_programming):
         times.append(time)
 
     context.user_data['times'] = times
@@ -253,7 +253,7 @@ async def alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
             print(prov)
             pass
         info_oficial = assemble_text(
-            translate.general_msg_info_oficial,
+            trans.general_msg_info_oficial,
             description_url='ECU911 Consulta de vias',
             url=settings.URL
         )

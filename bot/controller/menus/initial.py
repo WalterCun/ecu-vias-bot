@@ -2,7 +2,7 @@ from telegram import ReplyKeyboardMarkup
 
 
 from bot.controller.utils.assamble_keyboard_menu import assemble_keyboard, MenuOption, KeyboardType
-from bot.translations.core import translate
+from bot.libs.translate import trans
 
 
 def initial_menu() -> ReplyKeyboardMarkup:
@@ -15,8 +15,8 @@ def initial_menu() -> ReplyKeyboardMarkup:
         ReplyKeyboardMarkup: The initial menu keyboard markup.
 
     """
-    actions = {translate.menu_buttons_subscribe: MenuOption(row=0),
-               translate.menu_buttons_unsubscribe: MenuOption(row=0),
-               translate.menu_buttons_settings: MenuOption(row=1),
-               translate.menu_buttons_stop: MenuOption(row=1)}
+    actions = {trans.menu_buttons_subscribe: MenuOption(row=0),
+               trans.menu_buttons_unsubscribe: MenuOption(row=0),
+               trans.menu_buttons_settings: MenuOption(row=1),
+               trans.menu_buttons_stop: MenuOption(row=1)}
     return assemble_keyboard(actions, KeyboardType.KEYBOARD)

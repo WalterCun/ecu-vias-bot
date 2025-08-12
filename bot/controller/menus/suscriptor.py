@@ -5,8 +5,8 @@ from bot.controller.utils.assamble_keyboard_menu import MenuOption, assemble_key
 __all__ = ['suscriptor_menu']
 
 from bot.controller.utils.cheack_options_buttons import cheack_options
-from bot.translations.core import translate
-from settings.const import PROVINCES
+from bot.libs.translate import trans
+from bot.settings.const import PROVINCES
 
 
 def suscriptor_menu(subscribed: list = None, hide_keyboard=False) -> ReplyKeyboardMarkup:
@@ -16,7 +16,7 @@ def suscriptor_menu(subscribed: list = None, hide_keyboard=False) -> ReplyKeyboa
     :return: A ReplyKeyboardMarkup object containing the subscriber menu options.
     """
     actions = {
-        translate.general_msm_continue: MenuOption(0)
+        trans.general_msm_continue: MenuOption(0)
                }
     row_count = 1
     for province_index, province in enumerate(PROVINCES):
