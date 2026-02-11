@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     ID_ADMIN: int
 
     # Web Scrapping
-    URL_SCRAPPING_WEB: str
+    URL_SCRAPPING_WEB: str = "https://ecu911.gob.ec"
     DAYS_TO_KEEP_DATA: str
 
     # Cache Requests

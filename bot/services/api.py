@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ViasEcuadorAPI:
+    CERT_PATH = ".cerf/_.ecu911.gob.ec.crt"
     session = CachedSession(
         cache_name=settings.BASE_DIR / settings.CACHE_NAME,
         backend='sqlite',
@@ -19,7 +20,10 @@ class ViasEcuadorAPI:
     )
 
     def __init__(self):
-        self.url = settings.URL_SCRAPPING_WEB
+        # https://ecu911.gob.ec/Services/WSVias/ViasWeb.php?estado=A&and:%3C%3E:EstadoActual-id=593&order=Provincia-descripcion&limit=200&start=0
+        self.url = settings.URL_SCRAPPING_WEB + '/Services/WSVias/ViasWeb.php#'
+
+        # self.session.verify = self.CERT_PATH
 
         retry = Retry(
             total=3,
@@ -39,6 +43,7 @@ class ViasEcuadorAPI:
                 self.url,
                 headers=HEADERS,
                 timeout=15,
+                verify=False
             )
             response.raise_for_status()
             vias = response.json()
@@ -51,3 +56,7 @@ class ViasEcuadorAPI:
 
         data = vias.get('data', []) if isinstance(vias, dict) else []
         return data if isinstance(data, list) else []
+
+if __name__ == '__main__':
+    api = ViasEcuadorAPI()
+    print(api.get_states_vias())
