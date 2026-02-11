@@ -3,7 +3,7 @@ from bot.controller.utils.assamble_keyboard_menu import MenuOption
 
 def cheack_options(options: str, row_count: int, data: list = None):
     """
-    Checks if time is in data list and returns a dictionary containing the menu icon, time, and MenuOption.
+    Checks if time is in a data list and returns a dictionary containing the menu icon, time, and MenuOption.
 
     :param time: The time to check.
     :param row_count: The row count for the MenuOption.

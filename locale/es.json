@@ -4,20 +4,56 @@
     "description": "Un asistente que te mantendrá informado sobre el estado de las vías en Ecuador y las últimas novedades sobre el tránsito\n\nSelecciona una opción:"
   },
   "moderator": {
-      "menu": {
-        "btns": {
-          "subscribe": "\uD83D\uDCBE SUSCRIBIRSE \uD83D\uDCBE",
-          "unsubscribe": "\uD83D\uDDD1\uFE0F DESUSCRIBIRSE \uD83D\uDDD1\uFE0F",
-          "settings": "⚙\uFE0F CONFIGURACIONES ⚙\uFE0F",
-          "stop":"\uD83D\uDD12 DETENER \uD83D\uDD12"
-        }
+    "menu": {
+      "btns": {
+        "subscribe": "\uD83D\uDCBE SUSCRIBIRSE \uD83D\uDCBE",
+        "unsubscribe": "\uD83D\uDDD1\uFE0F DESUSCRIBIRSE \uD83D\uDDD1\uFE0F",
+        "settings": "⚙\uFE0F CONFIGURACIONES ⚙\uFE0F",
+        "stop": "\uD83D\uDD12 DETENER \uD83D\uDD12"
       }
+    }
   },
   "main": {
     "menu": {
       "btns": {
-        "stop": "El sistema se ha detenido... Espero que vuelvas pronto."
+        "stop": "\uD83D\uDD12 DETENER \uD83D\uDD12"
       }
+    },
+    "cancel": {
+      "message": "Muchas gracias por usar nuestro servicio. Todas las configuraciones han sido eliminadas correctamente."
     }
+  },
+  "suscriptor": {
+    "sms_continue": "➡️ CONTINUAR"
+  },
+
+  "general_msm_programming": "PROGRAMAR",
+  "general_msm_continue": "CONTINUAR",
+  "general_msg_info_oficial": "Para más información oficial visita {description_url}: {url}",
+
+  "errors": {
+    "generic_error": "Ha ocurrido un error procesando tu solicitud. Por favor, intenta nuevamente.",
+    "unknown_instruction": "Lo siento, no entiendo tu instrucción. Por favor, elige una opción del menú.",
+    "subscription_error": "Ocurrió un error procesando tu suscripción. Por favor, intenta nuevamente.",
+    "notifications_setup_error": "Ocurrió un error al configurar las notificaciones. Por favor, intenta nuevamente.",
+    "user_not_identified": "Error: Usuario no identificado",
+    "unsubscription_error": "Hubo un problema al procesar tu desuscripción. Por favor, inténtalo más tarde."
+  },
+
+  "notifications": {
+    "one_notification_day": "UNA NOTIFICACIÓN EN EL DÍA",
+    "ask_when": "¿Cuándo desea recibir las notificaciones?",
+    "choose_options": "Elige una de las siguientes opciones:",
+    "configured": "NOTIFICACIÓN CONFIGURADA",
+    "not_configured": "OPCIÓN NO CONFIGURADA"
+  },
+
+  "subscription": {
+    "choose_or_continue": "Puedes elegir otra provincia o presionar el botón de continuar..."
+  },
+
+  "unsubscription": {
+    "all_unsubscribed": "Has sido desuscrito de todas las notificaciones.",
+    "none_active": "No tienes suscripciones activas."
   }
 }

@@ -4,8 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-python-telegram-bot = {extras = ["job-queue"], version = "*"}
-python-dotenv = "*"
 pydantic = "*"
 pydantic-settings = "*"
 redis = "*"
