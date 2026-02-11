@@ -3,6 +3,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.libs.translate import trans
 from bot.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,9 @@ async def unsubscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         subscriptions = context.user_data.get('subscriptions', [])
         if subscriptions:
             context.user_data['subscriptions'] = []
-            await update.message.reply_text("Has sido desuscrito de todas las notificaciones.")
+            await update.message.reply_text(str(trans.unsubscription.all_unsubscribed))
         else:
-            await update.message.reply_text("No tienes suscripciones activas.")
+            await update.message.reply_text(str(trans.unsubscription.none_active))
 
     except Exception as e:
         logger.error(f"Error desconocido al desuscribir al usuario {user_id}: {e}")

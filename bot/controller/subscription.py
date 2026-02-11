@@ -83,19 +83,19 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     except Exception as e:
         logger.error(f"Error al manejar la suscripción: {e}")
-        await update.message.reply_text("Ocurrió un error procesando tu suscripción. Por favor, intenta nuevamente.")
+        await update.message.reply_text(str(trans.errors.subscription_error))
         return settings.SUBSCRIPTION
 
     if province == clean_text(settings.CONTINUE_BUTTON) and len(provinces) >= 1:
         await update.message.reply_text(
-            '¿Cuándo deseas recibir las notificaciones?\nElige una de las siguientes opciones:',
+            f"{str(trans.notifications.ask_when)}\n{str(trans.notifications.choose_options)}",
             reply_markup=notification_menu()
         )
         return settings.NOTIFICATIONS
 
     # Combina las instrucciones en un solo mensaje
     await update.message.reply_text(
-        'Puedes elegir otra provincia o presionar el botón de continuar...',
+        str(trans.subscription.choose_or_continue),
         reply_markup=suscriptor_menu(provinces)
     )
 
