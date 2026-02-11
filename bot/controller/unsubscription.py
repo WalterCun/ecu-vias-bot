@@ -42,4 +42,4 @@ async def unsubscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "Hubo un problema al procesar tu desuscripción. Por favor, inténtalo más tarde.")
         return settings.UNSUBSCRIBE_FAIL  # Asume un estado de fallo en desuscripción.
 
-    return settings.UNSUBSCRIBE  # Asume un estado de éxito en desuscripción.
+    return settings.UNSUBSCRIPTION  # Regresa al estado de desuscripción.
