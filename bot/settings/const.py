@@ -15,7 +15,6 @@ HEADERS = {
 #     f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}": time(hour=hour) for hour in range(24)
 # }
 #
-# from bot.translations.core import translate
 
 # SEVERAL_TIMES_A_DAY: list = [
 #     translate.times_one_hour,
