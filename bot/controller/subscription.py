@@ -7,8 +7,6 @@ from telegram.ext import ContextTypes
 from bot.controller.menus.notifications import notification_menu
 from bot.controller.menus.suscriptor import suscriptor_menu
 from bot.controller.utils.clean_text import clean_text
-from bot.libs.translate import trans
-
 from bot.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -77,7 +75,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         if province in provinces:
             provinces.remove(province)
             logger.info(f"Provincia removida: {province}")
-        elif province != clean_text(trans.general_msm_continue):
+        elif province != clean_text(settings.CONTINUE_BUTTON):
             provinces.append(province)
             logger.info(f"Provincia añadida: {province}")
 
@@ -88,7 +86,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         await update.message.reply_text("Ocurrió un error procesando tu suscripción. Por favor, intenta nuevamente.")
         return settings.SUBSCRIPTION
 
-    if province == clean_text(trans.general_msm_continue) and len(provinces) >= 1:
+    if province == clean_text(settings.CONTINUE_BUTTON) and len(provinces) >= 1:
         await update.message.reply_text(
             '¿Cuándo deseas recibir las notificaciones?\nElige una de las siguientes opciones:',
             reply_markup=notification_menu()

@@ -116,7 +116,7 @@ async def run_application():
                 settings.UNSUBSCRIPTION: [MessageHandler(filters.TEXT, unsubscription)],
                 settings.CONFIG: [MessageHandler(filters.TEXT, config)],
             },
-            fallbacks=[MessageHandler(filters.Regex(f"^{trans.main.menu.btns.stop}$"), cancel)],
+            fallbacks=[MessageHandler(filters.Regex(f"^{trans.moderator.menu.btns.stop}$"), cancel)],
         )
 
         app.add_handler(conv_handler)
