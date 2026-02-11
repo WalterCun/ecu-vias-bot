@@ -21,7 +21,7 @@ for your database type and connection details.
 """
 import logging
 from datetime import datetime, timedelta
-from time import sleep
+import asyncio
 
 import pytz
 
@@ -102,6 +102,11 @@ async def sync_db():
 
         if (now - last_request) > timedelta(seconds=settings.SYNCDB_TIME):
             data = api.get_states_vias()
+            if not data:
+                logger.warning(Fore.YELLOW + "Sin datos nuevos desde API de vías")
+                await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
+                continue
+
             for row in data:
 
                 via = await Vias.filter(province=row.get('Provincia', {}).get('descripcion'),
@@ -137,7 +142,7 @@ async def sync_db():
             last_request = now
 
         logger.warning(Fore.BLUE + f">> Base de datos actualizada: ")
-        sleep(settings.SYNCDB_REFRESH_TIME)
+        await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
 
 # if __name__ == '__main__':
 #     asyncio.run(sync_db())

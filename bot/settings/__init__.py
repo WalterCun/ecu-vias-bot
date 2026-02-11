@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     BASE_DIR: Path = Path(__file__).parent.parent.parent
 
     # Fluid
-    LOCALES_PATH: Path = BASE_DIR / 'src' / 'controller' / 'languages' / 'langs'
+    LOCALES_PATH: Path = BASE_DIR / 'locale'
 
     # States indexes for conversation handler
     MODERATOR: int = 0
@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     NOTIFICATIONS: int = 2
     ALARM_NOTIFICATIONS: int = 3
     UNSUBSCRIPTION: int = 4
+    UNSUBSCRIBE: int = 4
     CONFIG: int = 5
     CANCEL: int = 6
     UNSUBSCRIBE_FAIL: int = 7
@@ -57,6 +58,10 @@ class Settings(BaseSettings):
     # Sync DB
     SYNCDB_REFRESH_TIME: int = 5
     SYNCDB_TIME: int = 60*60
+
+    # UI labels
+    CONTINUE_BUTTON: str = 'CONTINUAR ✅'
+    PROGRAMMING_DONE_BUTTON: str = 'PROGRAMAR ✅'
 
     class Config:
         """
