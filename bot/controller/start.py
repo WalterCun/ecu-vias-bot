@@ -8,6 +8,7 @@ from telegram.ext import CallbackContext
 
 from bot.controller.menus.initial import initial_menu
 from bot.controller.utils.assemble_text import assemble_text
+from bot.controller.utils.conversation_context import get_language, set_language
 from bot.libs.translate import trans
 from bot.settings import settings
 
@@ -77,7 +78,7 @@ async def start(update: Update, context: CallbackContext) -> int:
         # Obtener el idioma con validación mejorada
         default_lang = 'es'  # Idioma por defecto
         user_lang = update.effective_user.language_code
-        stored_lang = context.user_data.get('language')
+        stored_lang = get_language(context.user_data, default_lang)
 
         # Usar idioma almacenado, luego idioma del usuario, finalmente por defecto
         _lang = stored_lang or user_lang or default_lang
@@ -86,7 +87,7 @@ async def start(update: Update, context: CallbackContext) -> int:
         if not _lang or len(_lang) < 2:
             _lang = default_lang
 
-        context.user_data['language'] = _lang
+        set_language(context.user_data, _lang)
 
         # Validar que trans está disponible antes de usarlo
         try:
@@ -95,7 +96,7 @@ async def start(update: Update, context: CallbackContext) -> int:
             logger.error(f"Error setting language {_lang}: {trans_error}")
             # Intentar con idioma por defecto
             trans.lang = default_lang
-            context.user_data['language'] = default_lang
+            set_language(context.user_data, default_lang)
 
         # Obtener nombre del usuario con validación
         user_name = update.effective_user.first_name or "Usuario"

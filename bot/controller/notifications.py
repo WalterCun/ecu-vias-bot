@@ -1,4 +1,4 @@
-""" src/bot_controller/notifications.py """
+"""Notification flow handlers."""
 import logging
 from datetime import time as dt_time
 
@@ -11,8 +11,12 @@ from bot.controller.menus.initial import initial_menu
 from bot.controller.menus.notifications import notification_menu_times
 from bot.controller.utils.assemble_text import assemble_text
 from bot.controller.utils.clean_text import clean_text
-from bot.libs.translate import trans
-
+from bot.controller.utils.conversation_context import (
+    get_selected_provinces,
+    get_selected_times,
+    set_alarm_times,
+    toggle_time,
+)
 from bot.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -22,56 +26,49 @@ ONE_NOTIFICATION = 'UNA NOTIFICACION EN EL DIA'
 
 
 async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Handles the notification setup as per the user's choice.
-    """
+    """Handles notification mode selection and preserves previous selection context."""
     time_option = clean_text(update.message.text)
     logger.info("Metodo notifications -> instruccion: %s", time_option)
 
-    if time_option == clean_text(ONE_NOTIFICATION):
-        times = context.user_data.get('times', [])
-        if not isinstance(times, list):
-            times = []
-        context.user_data['times'] = [t for t in times if t in settings.ONCE_A_DAY]
+    if time_option != clean_text(ONE_NOTIFICATION):
+        await update.message.reply_text('Opción no válida. Por favor elige una opción del menú.')
+        return settings.NOTIFICATIONS
 
-        await update.message.reply_text(
-            '¿Cuándo desea recibir las notificaciones?',
-            reply_markup=notification_menu_times(context.user_data['times'], 'one')
-        )
-        return settings.ALARM_NOTIFICATIONS
+    selected_times = get_selected_times(context.user_data)
+    context.user_data['times'] = selected_times
+
+    prefix = '¿Cuándo desea recibir las notificaciones?'
+    if context.user_data.get('alarms'):
+        prefix = 'Tienes horarios guardados. Puedes ajustarlos y volver a programar.'
 
     await update.message.reply_text(
-        'Opción no válida. Por favor elige una opción del menú.',
-        reply_markup=notification_menu_times(context.user_data.get('times', []), 'one')
+        prefix,
+        reply_markup=notification_menu_times(selected_times, 'one')
     )
-    return settings.NOTIFICATIONS
+    return settings.ALARM_NOTIFICATIONS
 
 
 async def alarm_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Configures alarm notifications.
-    """
+    """Configures and persists alarm schedule selection flow."""
     chat_id = update.effective_message.chat_id
     selected_time = clean_text(update.message.text)
 
     logger.info("Metodo alarm_notifications -> instruccion: %s -> %s", chat_id, selected_time)
 
-    times = context.user_data.get('times', [])
-    if not isinstance(times, list):
-        times = []
-
     if selected_time == clean_text(settings.PROGRAMMING_DONE_BUTTON):
-        if not times:
+        selected_times = get_selected_times(context.user_data)
+
+        if not selected_times:
             await update.effective_message.reply_text(
                 'Debes seleccionar al menos un horario antes de programar.',
-                reply_markup=notification_menu_times(times, 'one')
+                reply_markup=notification_menu_times(selected_times, 'one')
             )
             return settings.ALARM_NOTIFICATIONS
 
         remove_job_if_exists(str(chat_id), context)
 
         scheduled_times: list[dt_time] = []
-        for selected in times:
+        for selected in selected_times:
             clock = settings.ONCE_A_DAY.get(selected)
             if clock:
                 context.job_queue.run_daily(
@@ -83,38 +80,30 @@ async def alarm_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
                 scheduled_times.append(clock)
 
-        context.user_data['alarms'] = times
-        context.user_data.pop('times', None)
+        set_alarm_times(context.user_data, selected_times)
 
         await update.effective_message.reply_text('NOTIFICACION CONFIGURADA', reply_markup=initial_menu())
         logger.info("Notificaciones configuradas para chat_id=%s horarios=%s", chat_id, scheduled_times)
         return settings.MODERATOR
 
-    if selected_time in settings.ONCE_A_DAY:
-        if selected_time in times:
-            times.remove(selected_time)
-        else:
-            times.append(selected_time)
-
-        context.user_data['times'] = times
+    if selected_time not in settings.ONCE_A_DAY:
         await update.effective_message.reply_text(
-            'Selecciona más horarios o pulsa PROGRAMAR ✅ para guardar.',
-            reply_markup=notification_menu_times(times, 'one')
+            'No reconozco ese horario. Selecciona una opción del teclado.',
+            reply_markup=notification_menu_times(get_selected_times(context.user_data), 'one')
         )
         return settings.ALARM_NOTIFICATIONS
 
+    selected_times = toggle_time(context.user_data, selected_time)
     await update.effective_message.reply_text(
-        'No reconozco ese horario. Selecciona una opción del teclado.',
-        reply_markup=notification_menu_times(times, 'one')
+        'Selecciona más horarios o pulsa PROGRAMAR ✅ para guardar.',
+        reply_markup=notification_menu_times(selected_times, 'one')
     )
     return settings.ALARM_NOTIFICATIONS
 
 
 async def alarm(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Send alarm messages to the specified chat_id based on the provinces provided in the context.
-    """
-    provinces = context.user_data.get('provinces', [])
+    """Sends periodic reminder message from official source."""
+    provinces = get_selected_provinces(context.user_data)
     job = context.job
 
     if provinces:

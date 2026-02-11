@@ -2,13 +2,19 @@
 
 Bot de Telegram para consultar y notificar estado de vías del Ecuador.
 
-## Enfoque de traducciones (local-first)
+## Traducciones (ToolsTranslator)
 
-El proyecto usa archivos estáticos locales en `locale/*.json` como fuente principal de traducción.
+Este proyecto usa **ToolsTranslator** como única capa de traducciones.
 
-- ✅ **Flujo principal**: archivos JSON locales.
-- ⚠️ **Servidor de traducción**: opcional y fuera del flujo normal del bot.
-- ✅ El bot debe iniciar y funcionar sin depender de Docker/servidor de traducción.
+- Fuente principal: archivos locales `locale/*.json`.
+- Flujo por defecto: local-first (sin dependencia de server).
+- Server de traducción: opcional, para tareas asistidas/CLI.
+
+### Principios
+
+- El bot debe iniciar y operar normalmente solo con archivos locales.
+- El cambio de idioma en caliente se hace por instancia (`trans.lang = "es"`, etc.).
+- Claves faltantes se manejan según configuración de ToolsTranslator (`auto_add_missing_keys=False`).
 
 ## Build
 
@@ -22,7 +28,7 @@ docker build -t ecuvias-bot .
 docker run -p 80:80 ecuvias-bot
 ```
 
-## Redis (opcional para persistencia)
+## Redis (opcional para persistencia de estado)
 
 ```bash
 docker run --name redis-vias-bot -p 6379:6379 -v vol-vias-bot:/data -d redis
