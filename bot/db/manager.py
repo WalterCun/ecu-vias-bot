@@ -22,6 +22,7 @@ for your database type and connection details.
 import asyncio
 import logging
 from datetime import datetime, timedelta
+import asyncio
 
 import pytz
 from colorama import Fore, init
@@ -93,55 +94,62 @@ async def sync_db():
     api = ViasEcuadorAPI()
 
     while True:
-        now = datetime.now(ecuador_tz)
-        logger.warning(Fore.BLUE + f">> Revisando la base de datos... {now}")
+        try:
+            now = datetime.now(ecuador_tz)
+            logger.warning(Fore.BLUE + f">> Revisando la base de datos... {now}")
 
-        logger.warning(
-            Fore.WHITE + f'last_request: {now - last_request} > {settings.SYNCDB_TIME} : {(now - last_request) > timedelta(seconds=settings.SYNCDB_TIME)}')
+            logger.warning(
+                Fore.WHITE + f'last_request: {now - last_request} > {settings.SYNCDB_TIME} : {(now - last_request) > timedelta(seconds=settings.SYNCDB_TIME)}')
 
-        if (now - last_request) > timedelta(seconds=settings.SYNCDB_TIME):
-            data = api.get_states_vias()
-            if not data:
-                logger.warning(Fore.YELLOW + "Sin datos nuevos desde API de vías")
-                await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
-                continue
-
-            for row in data:
-
-                via = await Vias.filter(province=row.get('Provincia', {}).get('descripcion'),
-                                        via=row.get('descripcion')).first()
-
-                if via is not None and (
-                        via.state != row.get('EstadoActual', {}).get('nombre') or via.observations != row.get(
-                    'observaciones')):
-                    logger.warning(Fore.GREEN + 'Registro Encontrado, proceder a actualizar informacion')
-                    await Vias.filter(id=via.id).update(
-                        state=row.get('EstadoActual', {}).get('nombre'),
-                        observations=row.get('observaciones'),
-                        alternate_via=row.get('DetalleViaAlterna')[0].get('Via', {}).get('descripcion') if row.get(
-                            'DetalleViaAlterna') else None,
-                        extraction_datetime=now,
-                    )
-                elif via is not None and (
-                        via.state == row.get('EstadoActual', {}).get('nombre') or via.observations == row.get(
-                    'observaciones')):
-                    logger.warning(Fore.BLUE + f'No hay cambios.....')
+            if (now - last_request) > timedelta(seconds=settings.SYNCDB_TIME):
+                data = api.get_states_vias()
+                if not data:
+                    logger.warning(Fore.YELLOW + "Sin datos nuevos desde API de vías")
+                    await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
                     continue
-                else:
-                    logger.warning(Fore.RED + f'Ingresando registro: {via}')
-                    await Vias.create(
-                        province=row.get('Provincia', {}).get('descripcion'),
-                        via=row.get('descripcion'),
-                        state=row.get('EstadoActual', {}).get('nombre'),
-                        observations=row.get('observaciones'),
-                        alternate_via=row.get('DetalleViaAlterna')[0].get('Via', {}).get('descripcion') if row.get(
-                            'DetalleViaAlterna') else None,
-                    )
 
-            last_request = now
+                for row in data:
 
-        logger.warning(Fore.BLUE + f">> Base de datos actualizada: ")
-        await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
+                    via = await Vias.filter(province=row.get('Provincia', {}).get('descripcion'),
+                                            via=row.get('descripcion')).first()
+
+                    if via is not None and (
+                            via.state != row.get('EstadoActual', {}).get('nombre') or via.observations != row.get(
+                        'observaciones')):
+                        logger.warning(Fore.GREEN + 'Registro Encontrado, proceder a actualizar informacion')
+                        await Vias.filter(id=via.id).update(
+                            state=row.get('EstadoActual', {}).get('nombre'),
+                            observations=row.get('observaciones'),
+                            alternate_via=row.get('DetalleViaAlterna')[0].get('Via', {}).get('descripcion') if row.get(
+                                'DetalleViaAlterna') else None,
+                            extraction_datetime=now,
+                        )
+                    elif via is not None and (
+                            via.state == row.get('EstadoActual', {}).get('nombre') or via.observations == row.get(
+                        'observaciones')):
+                        logger.warning(Fore.BLUE + f'No hay cambios.....')
+                        continue
+                    else:
+                        logger.warning(Fore.RED + f'Ingresando registro: {via}')
+                        await Vias.create(
+                            province=row.get('Provincia', {}).get('descripcion'),
+                            via=row.get('descripcion'),
+                            state=row.get('EstadoActual', {}).get('nombre'),
+                            observations=row.get('observaciones'),
+                            alternate_via=row.get('DetalleViaAlterna')[0].get('Via', {}).get('descripcion') if row.get(
+                                'DetalleViaAlterna') else None,
+                        )
+
+                last_request = now
+
+            logger.warning(Fore.BLUE + f">> Base de datos actualizada: ")
+            await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
+        except asyncio.CancelledError:
+            logger.info("sync_db cancelado")
+            raise
+        except Exception as e:
+            logger.error(f"Error en loop de sync_db: {e}")
+            await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
 
 # if __name__ == '__main__':
 #     asyncio.run(sync_db())

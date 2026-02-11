@@ -7,7 +7,6 @@ from bot.controller.menus.notifications import notification_menu
 from bot.controller.menus.suscriptor import suscriptor_menu
 from bot.controller.utils.clean_text import clean_text
 from bot.controller.utils.conversation_context import toggle_province
-from bot.libs.translate import trans
 from bot.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -17,8 +16,6 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     """
     Handles province selection for subscription flow.
     """
-
-
     province = clean_text(update.message.text)
     logger.info("Metodo suscription -> instruccion: %s", province)
 

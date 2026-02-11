@@ -1,7 +1,6 @@
 """ main.py """
 import asyncio
 import logging
-import threading
 
 from colorama import init
 from telegram import Update
@@ -63,37 +62,22 @@ async def close_db():
     await Tortoise.close_connections()
 
 
-def start_sync_db_thread():
+def start_sync_db_task() -> asyncio.Task:
     """
-    Inicia el hilo de sincronización de base de datos.
+    Inicia la sincronización de base de datos en el mismo event-loop de la app.
+
+    Esto evita errores de contexto de Tortoise al ejecutar ORM en otro hilo.
     """
-    def run_sync_db():
-        try:
-            # Crear un bucle de eventos para este hilo
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            # Ejecutar sync_db
-            loop.run_until_complete(sync_db())
-        except Exception as e:
-            logger.error(f"Error en sync_db: {e}")
-        finally:
-            try:
-                loop.close()
-            except:
-                pass
-
-    # Crear y iniciar el hilo daemon
-    thread = threading.Thread(target=run_sync_db, daemon=True)
-    thread.start()
-    logger.info("Hilo de sincronización de DB iniciado")
-    return thread
+    task = asyncio.create_task(sync_db(), name="sync-db")
+    logger.info("Tarea de sincronización de DB iniciada")
+    return task
 
 
 async def run_application():
     """
     Función asíncrona principal que ejecuta la aplicación del bot.
     """
+    sync_task: asyncio.Task | None = None
     try:
         # Inicializar base de datos
         await init_db()
@@ -121,13 +105,13 @@ async def run_application():
         app.add_handler(conv_handler)
         logger.info("Iniciando Ejecucion de @ViasEC_bot")
 
-        # Iniciar el hilo de sincronización de DB
-        start_sync_db_thread()
-
         # Inicializar y ejecutar el bot
         async with app:
             await app.initialize()
             await app.start()
+
+            # Iniciar sync_db dentro del mismo loop/contexto
+            sync_task = start_sync_db_task()
 
             # Ejecutar polling
             await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
@@ -150,6 +134,15 @@ async def run_application():
         traceback.print_exc()
         raise
     finally:
+        if sync_task:
+            sync_task.cancel()
+            try:
+                await sync_task
+            except asyncio.CancelledError:
+                logger.info("Tarea sync_db cancelada correctamente")
+            except Exception as e:
+                logger.error(f"Error al detener sync_db: {e}")
+
         # Cerrar conexiones de base de datos
         try:
             await close_db()

@@ -6,8 +6,6 @@ This project uses translation files stored in `locale/*.json` as its primary
 source. Translation server features are optional and not required for runtime.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from translator import Translator
