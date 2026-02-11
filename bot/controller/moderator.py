@@ -53,7 +53,6 @@ async def moderator(update: Update, context: CallbackContext) -> int:
     text = update.message.text
     logger.info(f"Leer instruccion: {text}")
 
-    print(text == trans.moderator.menu.btns.subscribe)
 
     try:
         if text == trans.moderator.menu.btns.subscribe:
