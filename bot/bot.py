@@ -1,38 +1,142 @@
-""" src/bot.py """
+import asyncio
 import logging
+import threading
+from asyncio import AbstractEventLoop
+from typing import Optional
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler
+from telegram.ext import ApplicationBuilder, ConversationHandler, CommandHandler, MessageHandler, filters
+from tortoise import Tortoise
 
-from bot.controller.commands.cancel import cancel
-from bot.controller import config
-from bot.controller import language
-from bot.controller import moderator
-from bot.controller import notifications, alarm_notifications
-from bot.controller import start
-from bot.controller.subscription import subscription
-from bot.controller import unsubscription
-from bot.controller.utils.clean_text import clean_text
-from bot.libs import RedisPersistence
-from settings import settings
+from bot.controller import moderator, start, subscription, notifications, unsubscription, alarm_notifications
+from bot.controller.commands import config, cancel
+from bot.db.manager import sync_db
+from bot.libs.redis_persistence import RedisPersistence
+from bot.libs.translate import trans
+from bot.settings import settings
 
 logger = logging.getLogger(__name__)
 
+DATABASE_CONFIG = {
+    "connections": {
+        "default": f'sqlite://{settings.BASE_DIR / settings.DB_NAME}'
+    },
+    "apps": {
+        "models": {
+            "models": ['bot.db.models'],
+            "default_connection": "default",
+        }
+    },
+}
 
-def start_bot():
+
+async def init_db():
     """
-
-    Start the Telegram bot with predefined handlers for conversation states and persistence.
-
-    This function initializes the bot using the `telegram` library and sets up a conversation handler
-    with various states to manage user interactions. The bot's persistence is managed through a
-    PicklePersistence object, ensuring that data is stored between sessions.
-
-    Handlers:
-    - entry_points: Defines the commands and messages to initiate the conversation
-    - states: Maps bot states to their respective message handlers
-    - fallbacks: Specifies the message handler for stopping the conversation
-
-    The bot is configured to log the start of its execution and run in polling mode.
+    Initializes the Tortoise ORM and generates database schemas asynchronously.
     """
+    await Tortoise.init(config=DATABASE_CONFIG)
+    await Tortoise.generate_schemas()
 
+
+async def close_db():
+    """
+    Closes all database connections managed by Tortoise ORM.
+    """
+    await Tortoise.close_connections()
+
+
+def start_sync_db_thread():
+    """
+    Inicia el hilo de sincronización de base de datos.
+    """
+    loop:Optional[AbstractEventLoop] = None
+    def run_sync_db():
+        try:
+            # Crear un bucle de eventos para este hilo
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            # Ejecutar sync_db
+            loop.run_until_complete(sync_db())
+        except Exception as e:
+            logger.error(f"Error en sync_db: {e}")
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
+
+    # Crear y iniciar el hilo daemon
+    thread = threading.Thread(target=run_sync_db, daemon=True)
+    thread.start()
+    logger.info("Hilo de sincronización de DB iniciado")
+    return thread
+
+
+async def run_application():
+    """
+    Función asíncrona principal que ejecuta la aplicación del bot.
+    """
+    try:
+        # Inicializar base de datos
+        await init_db()
+        logger.info("Base de datos inicializada correctamente")
+
+        # Configurar persistencia y aplicación
+        persistence = RedisPersistence(settings.REDIS_URL)
+        app = ApplicationBuilder().token(settings.TELEGRAM_KEY_BOT).persistence(persistence).build()
+
+        # Configurar conversation handler
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('start', start),
+                          MessageHandler(filters.TEXT & filters.COMMAND, start)],
+            states={
+                settings.MODERATOR: [MessageHandler(filters.TEXT, moderator), CommandHandler('start', start)],
+                settings.SUBSCRIPTION: [MessageHandler(filters.TEXT, subscription), CommandHandler('start', start)],
+                settings.NOTIFICATIONS: [MessageHandler(filters.TEXT, notifications), CommandHandler('start', start)],
+                settings.ALARM_NOTIFICATIONS: [MessageHandler(filters.TEXT, alarm_notifications), CommandHandler('start', start)],
+                settings.UNSUBSCRIPTION: [MessageHandler(filters.TEXT, unsubscription), CommandHandler('start', start)],
+                settings.CONFIG: [MessageHandler(filters.TEXT, config), CommandHandler('start', start)],
+            },
+            fallbacks=[MessageHandler(filters.Regex(f"^{trans.moderator.menu.btns.stop}$"), cancel)],
+        )
+
+        app.add_handler(conv_handler)
+        logger.info("Iniciando Ejecucion de @ViasEC_bot")
+
+        # Iniciar el hilo de sincronización de DB
+        # start_sync_db_thread()
+
+        # Inicializar y ejecutar el bot
+        async with app:
+            await app.initialize()
+            await app.start()
+
+            # Ejecutar polling
+            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+            # Mantener el bot ejecutándose
+            try:
+                # Esperar indefinidamente hasta que se interrumpa
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                # Detener polling y cerrar updater antes de cerrar la aplicación
+                try:
+                    await app.stop()
+                except Exception as e:
+                    logger.warning(f"Error al detener el updater: {e}")
+
+    except Exception as e:
+        logger.error(f"Error al ejecutar la aplicación: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+    finally:
+        # Cerrar conexiones de base de datos
+        try:
+            await close_db()
+            logger.info("Conexiones de base de datos cerradas")
+        except Exception as e:
+            logger.error(f"Error al cerrar la base de datos: {e}")

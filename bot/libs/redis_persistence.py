@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ src/libs/redis_persistence.py """
+import pickle
 from pprint import pprint
 
 import redis.asyncio as aioredis
-import pickle
 from telegram.ext import BasePersistence
 
 

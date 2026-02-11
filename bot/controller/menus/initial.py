@@ -1,6 +1,5 @@
 from telegram import ReplyKeyboardMarkup
 
-
 from bot.controller.utils.assamble_keyboard_menu import assemble_keyboard, MenuOption, KeyboardType
 from bot.libs.translate import trans
 

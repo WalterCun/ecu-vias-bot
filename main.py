@@ -2,11 +2,10 @@
 import asyncio
 import logging
 
+from colorama import init
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ConversationHandler, CommandHandler, filters, MessageHandler
-
 from tortoise import Tortoise
-from colorama import init
 
 from bot.libs.translate import trans
 

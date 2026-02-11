@@ -1,6 +1,7 @@
 """src/config/settings.py"""
 from datetime import time
 from pathlib import Path
+
 from pydantic_settings import BaseSettings
 
 
