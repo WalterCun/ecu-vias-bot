@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from bot.controller.menus.notifications import notification_menu
 from bot.controller.menus.suscriptor import suscriptor_menu
 from bot.controller.utils.clean_text import clean_text
+from bot.libs.translate import trans
 from bot.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     :return: The status code indicating the result of the subscription
     :rtype: int
     """
+
+
     province = clean_text(update.message.text)
     logger.info(f"Metodo suscription -> instruccion: {province}")
 
