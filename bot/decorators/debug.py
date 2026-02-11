@@ -2,7 +2,7 @@
 """ debug.py """
 import inspect
 
-from settings import settings
+from bot.settings import settings
 
 
 def print_result(func):

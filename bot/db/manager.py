@@ -19,7 +19,6 @@ Update the `DATABASE_CONFIG` dictionary as needed to reflect the appropriate set
 for your database type and connection details.
 
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta
 import asyncio
@@ -27,42 +26,13 @@ import asyncio
 import pytz
 from colorama import Fore, init
 
-from bot.db.models import Vias
+from bot.db.models import Via
 from bot.services.api import ViasEcuadorAPI
 from bot.settings import settings
 
 init(autoreset=True)
 
 logger = logging.getLogger(__name__)
-
-
-# async def init():
-#     """
-#     Initializes the Tortoise ORM and generates database schemas asynchronously.
-#
-#     This function sets up the ORM by initializing it with the provided database configuration
-#     and then generates the necessary schemas for the database according to the defined models.
-#
-#     Raises:
-#         ConfigurationError: If the provided database configuration is invalid.
-#         OperationalError: If there is an issue connecting to the database.
-#     """
-#     await Tortoise.init(config=DATABASE_CONFIG)
-#     await Tortoise.generate_schemas()
-#
-#
-# async def close_db():
-#     """
-#     Closes all database connections managed by Tortoise ORM.
-#
-#     This asynchronous function ensures that all active database connections are
-#     properly closed. It is used to clean up resources when the application shuts
-#     down or when database connections need to be explicitly terminated.
-#
-#     Raises:
-#         TortoiseException: If there is an issue during connection closure.
-#     """
-#     await Tortoise.close_connections()
 
 
 async def sync_db():
@@ -82,7 +52,7 @@ async def sync_db():
     logger.info('Obtener hora por default cuando la base esta vacia')
     ahora = datetime.now(ecuador_tz)
     # ahora = datetime.now(ecuador_tz)
-    last_request = await Vias.filter().order_by("-extraction_datetime").first()
+    last_request = await Via.filter().order_by("-extraction_datetime").first()
     last_request = last_request.extraction_datetime_ec if last_request else datetime(ahora.year, ahora.month, 1)
 
     if last_request:
@@ -151,5 +121,5 @@ async def sync_db():
             logger.error(f"Error en loop de sync_db: {e}")
             await asyncio.sleep(settings.SYNCDB_REFRESH_TIME)
 
-# if __name__ == '__main__':
-#     asyncio.run(sync_db())
+if __name__ == '__main__':
+    asyncio.run(sync_db())
