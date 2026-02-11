@@ -94,11 +94,8 @@ async def start(update: Update, context: CallbackContext) -> int:
         except (AttributeError, ValueError) as trans_error:
             logger.error(f"Error setting language {_lang}: {trans_error}")
             # Intentar con idioma por defecto
-            try:
-                trans.lang = default_lang
-                context.user_data['language'] = default_lang
-            except Exception:
-                logger.error("No se pudo configurar idioma por defecto")
+            trans.lang = default_lang
+            context.user_data['language'] = default_lang
 
         # Obtener nombre del usuario con validación
         user_name = update.effective_user.first_name or "Usuario"
