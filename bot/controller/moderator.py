@@ -1,7 +1,7 @@
 import logging
 
 from telegram import Update
-from telegram.ext import CallbackContext, ConversationHandler
+from telegram.ext import CallbackContext
 
 from bot.controller.menus.suscriptor import suscriptor_menu
 from bot.libs.translate import trans

@@ -1,9 +1,8 @@
-from enum import Enum
 from dataclasses import dataclass
-from typing import Optional, Any, List, TypeVar, Type, cast, Callable
 from datetime import datetime
+from enum import Enum
+from typing import Optional, Any, List, TypeVar, Type, cast, Callable
 from uuid import UUID
-import dateutil.parser
 
 T = TypeVar("T")
 EnumT = TypeVar("EnumT", bound=Enum)

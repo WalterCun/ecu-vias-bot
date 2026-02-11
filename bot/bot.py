@@ -8,8 +8,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ConversationHandler, CommandHandler, MessageHandler, filters
 from tortoise import Tortoise
 
-from bot.controller.commands import config, cancel
 from bot.controller import moderator, start, subscription, notifications, unsubscription, alarm_notifications
+from bot.controller.commands import config, cancel
 from bot.db.manager import sync_db
 from bot.libs.redis_persistence import RedisPersistence
 from bot.libs.translate import trans

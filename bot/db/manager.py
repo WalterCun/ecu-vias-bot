@@ -19,17 +19,16 @@ Update the `DATABASE_CONFIG` dictionary as needed to reflect the appropriate set
 for your database type and connection details.
 
 """
+import asyncio
 import logging
 from datetime import datetime, timedelta
-import asyncio
 
 import pytz
+from colorama import Fore, init
 
 from bot.db.models import Vias
 from bot.services.api import ViasEcuadorAPI
 from bot.settings import settings
-
-from colorama import Fore, init
 
 init(autoreset=True)
 

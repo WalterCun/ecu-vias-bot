@@ -6,14 +6,11 @@ This project uses translation files stored in `locale/*.json` as its primary
 source. Translation server features are optional and not required for runtime.
 """
 
-from pathlib import Path
-
 from __future__ import annotations
 
-import json
-import logging
 from pathlib import Path
-from typing import Any
+
+from translator import Translator
 
 from bot.settings import settings
 
