@@ -8,6 +8,7 @@ import os
 
 from telegram.ext import Application
 
+from bot.handlers import register_handlers
 from bot.libs.redis_persistence import RedisJSONPersistence
 from bot.services.api import ViasEcuadorAPI
 from bot.services.notification_engine import NotificationEngine
@@ -64,6 +65,8 @@ async def create_application() -> Application:
         .post_shutdown(post_shutdown)
         .build()
     )
+
+    register_handlers(application)
 
     notification_engine = NotificationEngine(
         via_service=via_service,
