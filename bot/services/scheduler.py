@@ -31,6 +31,8 @@ class AsyncScheduler:
         while not self._stop_event.is_set():
             try:
                 await self.task_callable()
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:  # noqa: BLE001
                 LOGGER.exception("Scheduled task failed: %s", exc)
 
@@ -45,7 +47,7 @@ class AsyncScheduler:
     async def start(self) -> None:
         """Start the scheduler loop if it is not already running."""
         if self._runner_task is not None and not self._runner_task.done():
-            LOGGER.info("Scheduler already running")
+            LOGGER.warning("Scheduler already running")
             return
 
         self._stop_event.clear()
@@ -56,11 +58,21 @@ class AsyncScheduler:
         """Signal the scheduler to stop and await background task shutdown."""
         self._stop_event.set()
 
-        if self._runner_task is None:
+        task = self._runner_task
+        if task is None:
             return
 
         try:
-            await self._runner_task
+            await asyncio.wait_for(task, timeout=max(1.0, float(self.interval_seconds)))
+        except asyncio.TimeoutError:
+            LOGGER.warning("Scheduler stop timed out; cancelling runner task")
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        except asyncio.CancelledError:
+            raise
         finally:
             self._runner_task = None
 
