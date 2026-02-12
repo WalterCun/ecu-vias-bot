@@ -9,6 +9,7 @@ class MessageBuilder:
     """Build human-readable notification messages for province changes."""
 
     TELEGRAM_MAX_LENGTH = 4096
+    _TRUNCATE_AT = 4000
     _SECTION_LIMIT = 12
 
     @classmethod
@@ -42,13 +43,19 @@ class MessageBuilder:
 
     @classmethod
     def _truncate(cls, message: str) -> str:
-        """Trim message to Telegram max length without breaking format abruptly."""
-        if len(message) <= cls.TELEGRAM_MAX_LENGTH:
+        """Trim long messages while keeping Telegram limits and readable formatting."""
+        suffix = "... (truncated)"
+
+        if len(message) <= cls._TRUNCATE_AT:
             return message
 
-        suffix = "\n\n… mensaje truncado"
-        allowed = cls.TELEGRAM_MAX_LENGTH - len(suffix)
-        return message[:allowed].rstrip() + suffix
+        allowed = min(cls._TRUNCATE_AT, cls.TELEGRAM_MAX_LENGTH) - len(suffix)
+        truncated = message[: max(0, allowed)].rstrip() + suffix
+
+        if len(truncated) > cls.TELEGRAM_MAX_LENGTH:
+            truncated = truncated[: cls.TELEGRAM_MAX_LENGTH - len(suffix)].rstrip() + suffix
+
+        return truncated
 
     @classmethod
     def build_notification(cls, province: str, changes: dict) -> str:
