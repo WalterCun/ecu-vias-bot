@@ -163,6 +163,34 @@ class RedisJSONPersistence(BasePersistence):
         except RedisConnectionError as exc:
             LOGGER.error("Redis unavailable while dropping chat data: %s", exc)
 
+    async def get_user_data_by_id(self, user_id: int) -> dict:
+        """Return user_data for a single user using O(1) HGET."""
+        try:
+            payload = await self.redis.hget(self.USER_DATA_KEY, str(user_id))
+            if payload is None:
+                return {}
+            return self._deserialize(payload)
+        except RedisConnectionError as exc:
+            LOGGER.error("Redis unavailable while getting user data by id %s: %s", user_id, exc)
+            return {}
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Unexpected error while getting user data by id %s: %s", user_id, exc)
+            return {}
+
+    async def get_chat_data_by_id(self, chat_id: int) -> dict:
+        """Return chat_data for a single chat using O(1) HGET."""
+        try:
+            payload = await self.redis.hget(self.CHAT_DATA_KEY, str(chat_id))
+            if payload is None:
+                return {}
+            return self._deserialize(payload)
+        except RedisConnectionError as exc:
+            LOGGER.error("Redis unavailable while getting chat data by id %s: %s", chat_id, exc)
+            return {}
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Unexpected error while getting chat data by id %s: %s", chat_id, exc)
+            return {}
+
     async def get_bot_data(self) -> dict:
         """Get bot-wide data."""
         try:
