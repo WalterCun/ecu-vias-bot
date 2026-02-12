@@ -47,19 +47,11 @@ class SubscriptionService:
         return sorted(validated)
 
     async def _get_user_data(self, user_id: int) -> dict:
-        """Fetch a single user's data directly from Redis hash storage."""
+        """Fetch a single user's data using the persistence O(1) getter."""
         try:
-            payload = await self.persistence.redis.hget(
-                self.persistence.USER_DATA_KEY,
-                str(user_id),
-            )
+            return await self.persistence.get_user_data_by_id(user_id)
         except RedisConnectionError:
             return {}
-
-        if payload is None:
-            return {}
-
-        return self.persistence._deserialize(payload)
 
     async def subscribe(self, user_id: int, province: str, times: list[str]) -> dict:
         """Subscribe a user to a province and one or more notification times."""
@@ -118,10 +110,16 @@ class SubscriptionService:
         return {"subscriptions": normalized}
 
     async def list_subscribers_by_province(self, province: str) -> list[int]:
-        """List user IDs subscribed to the given province."""
+        """List user IDs subscribed to the given province.
+
+        Note:
+            This performs an O(n) scan via HGETALL because there is currently no
+            secondary province index.
+        """
         normalized_province = self._validate_province(province)
 
         try:
+            # TODO: Introduce a province -> user_ids secondary index to make this O(1)/O(log n).
             raw_user_map = await self.persistence.redis.hgetall(self.persistence.USER_DATA_KEY)
         except RedisConnectionError:
             return []
