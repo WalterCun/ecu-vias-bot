@@ -7,7 +7,7 @@ import copy
 import logging
 from typing import Any
 
-from telegram.error import TelegramError
+from telegram.error import RetryAfter, TelegramError, TimedOut
 
 
 LOGGER = logging.getLogger(__name__)
@@ -22,12 +22,14 @@ class NotificationEngine:
         subscription_service: Any,
         notification_policy: Any,
         bot: Any,
+        max_concurrent_sends: int = 20,
     ) -> None:
         """Initialize notification engine dependencies."""
         self.via_service = via_service
         self.subscription_service = subscription_service
         self.notification_policy = notification_policy
         self.bot = bot
+        self._send_semaphore = asyncio.Semaphore(max(1, max_concurrent_sends))
         self._last_vias: dict[str, list[dict[str, Any]]] = {}
 
     @staticmethod
@@ -48,14 +50,36 @@ class NotificationEngine:
 
         return "\n".join(lines)
 
-    async def _send_to_user(self, user_id: int, message: str) -> None:
-        """Send a notification message to a user with defensive error handling."""
-        try:
-            await self.bot.send_message(chat_id=user_id, text=message)
-        except TelegramError as exc:
-            LOGGER.error("Failed to send notification to user %s: %s", user_id, exc)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.error("Unexpected send error for user %s: %s", user_id, exc)
+    async def _safe_send(self, user_id: int, text: str) -> None:
+        """Send a notification with retries for transient Telegram errors."""
+        async with self._send_semaphore:
+            try:
+                await self.bot.send_message(chat_id=user_id, text=text)
+                return
+            except RetryAfter as exc:
+                await asyncio.sleep(float(exc.retry_after))
+                try:
+                    await self.bot.send_message(chat_id=user_id, text=text)
+                except TelegramError as retry_exc:
+                    LOGGER.error("Failed to send notification after RetryAfter to user %s: %s", user_id, retry_exc)
+                except Exception as retry_exc:  # noqa: BLE001
+                    LOGGER.error("Unexpected retry error for user %s: %s", user_id, retry_exc)
+                return
+            except TimedOut:
+                await asyncio.sleep(1)
+                try:
+                    await self.bot.send_message(chat_id=user_id, text=text)
+                except TelegramError as retry_exc:
+                    LOGGER.error("Failed to send notification after timeout retry to user %s: %s", user_id, retry_exc)
+                except Exception as retry_exc:  # noqa: BLE001
+                    LOGGER.error("Unexpected timeout retry error for user %s: %s", user_id, retry_exc)
+                return
+            except TelegramError as exc:
+                LOGGER.error("Failed to send notification to user %s: %s", user_id, exc)
+                return
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.error("Unexpected send error for user %s: %s", user_id, exc)
+                return
 
     async def run_cycle(self) -> None:
         """Run one notification cycle: fetch, compare, notify, and update state."""
@@ -85,27 +109,26 @@ class NotificationEngine:
             return
 
         for province, province_changes in changes.items():
-            if not isinstance(province_changes, dict):
-                continue
-
-            has_changes = any(
-                province_changes.get(change_type)
-                for change_type in ("new", "removed", "updated")
-            )
-            if not has_changes:
-                continue
-
             try:
+                if not isinstance(province_changes, dict):
+                    continue
+
+                has_changes = any(
+                    province_changes.get(change_type)
+                    for change_type in ("new", "removed", "updated")
+                )
+                if not has_changes:
+                    continue
+
                 subscribers = await self.subscription_service.list_subscribers_by_province(province)
+                if not subscribers:
+                    continue
+
+                message = self._build_message(province, province_changes)
+                tasks = [self._safe_send(user_id, message) for user_id in subscribers]
+                await asyncio.gather(*tasks, return_exceptions=True)
             except Exception as exc:  # noqa: BLE001
-                LOGGER.error("Failed loading subscribers for province %s: %s", province, exc)
+                LOGGER.error("Failed processing notifications for province %s: %s", province, exc)
                 continue
-
-            if not subscribers:
-                continue
-
-            message = self._build_message(province, province_changes)
-            tasks = [self._send_to_user(user_id, message) for user_id in subscribers]
-            await asyncio.gather(*tasks, return_exceptions=True)
 
         self._last_vias = copy.deepcopy(latest_vias)
