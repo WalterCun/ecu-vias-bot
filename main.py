@@ -81,6 +81,8 @@ async def create_application() -> Application:
         task_callable=notification_engine.run_cycle,
     )
 
+    application.bot_data["subscription_service"] = subscription_service
+    application.bot_data["via_service"] = via_service
     application.bot_data["engine"] = notification_engine
     application.bot_data["scheduler"] = scheduler
 
