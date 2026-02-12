@@ -82,19 +82,26 @@ class RedisJSONPersistence(BasePersistence):
         return json.dumps(key, ensure_ascii=False, separators=(",", ":"))
 
     @staticmethod
-    def _parse_conversation_field(field: str) -> tuple[Any, ...]:
-        """Deserialize a conversation field string back to tuple form."""
+    def _parse_conversation_field(field: str) -> tuple[int, int] | None:
+        """Deserialize a conversation field string back to ``(chat_id, user_id)``."""
         try:
             if orjson is not None:
                 parsed = orjson.loads(field)
             else:
                 parsed = json.loads(field)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            return (field,)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            LOGGER.error("Invalid conversation key format (decode error): %s", exc)
+            return None
 
-        if isinstance(parsed, (list, tuple)):
-            return tuple(parsed)
-        return (parsed,)
+        if not isinstance(parsed, list) or len(parsed) != 2:
+            LOGGER.error("Invalid conversation key format (expected list of 2): %r", parsed)
+            return None
+
+        try:
+            return int(parsed[0]), int(parsed[1])
+        except (TypeError, ValueError) as exc:
+            LOGGER.error("Invalid conversation key format (non-int items): %s", exc)
+            return None
 
     async def get_user_data(self) -> dict[int, dict]:
         """Get all user data from Redis hash storage."""
@@ -211,20 +218,23 @@ class RedisJSONPersistence(BasePersistence):
         except RedisConnectionError as exc:
             LOGGER.error("Redis unavailable while dropping callback data: %s", exc)
 
-    async def get_conversations(self, name: str) -> dict:
+    async def get_conversations(self, name: str) -> dict[tuple[int, int], object]:
         """Get all conversations for a handler."""
         redis_key = f"{self.CONVERSATIONS_PREFIX}{name}"
         try:
             raw_map = await self.redis.hgetall(redis_key)
-            return {
-                self._parse_conversation_field(field): self._deserialize_value(value)
-                for field, value in raw_map.items()
-            }
+            conversations: dict[tuple[int, int], object] = {}
+            for field, value in raw_map.items():
+                parsed_key = self._parse_conversation_field(field)
+                if parsed_key is None:
+                    continue
+                conversations[parsed_key] = self._deserialize_value(value)
+            return conversations
         except RedisConnectionError as exc:
             LOGGER.error("Redis unavailable while getting conversations: %s", exc)
             return {}
 
-    async def update_conversation(self, name: str, key: tuple, new_state: object) -> None:
+    async def update_conversation(self, name: str, key: tuple[int, int], new_state: object) -> None:
         """Persist a conversation state for a handler and key tuple."""
         redis_key = f"{self.CONVERSATIONS_PREFIX}{name}"
         field = self._conversation_field(key)
@@ -235,6 +245,15 @@ class RedisJSONPersistence(BasePersistence):
             await self.redis.hset(redis_key, field, self._serialize_value(new_state))
         except RedisConnectionError as exc:
             LOGGER.error("Redis unavailable while updating conversation: %s", exc)
+
+
+    async def drop_conversations(self, name: str) -> None:
+        """Drop all conversations for a handler."""
+        redis_key = f"{self.CONVERSATIONS_PREFIX}{name}"
+        try:
+            await self.redis.delete(redis_key)
+        except RedisConnectionError as exc:
+            LOGGER.error("Redis unavailable while dropping conversations: %s", exc)
 
     async def flush(self) -> None:
         """Flush Redis DB for this persistence instance."""
