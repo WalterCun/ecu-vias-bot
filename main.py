@@ -1,170 +1,95 @@
-""" main.py """
+"""Application entrypoint with production-ready lifecycle wiring."""
+
+from __future__ import annotations
+
 import asyncio
 import logging
+import os
 
-from colorama import init
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ConversationHandler, CommandHandler, filters, MessageHandler
-from tortoise import Tortoise
+from telegram.ext import Application
 
-from bot.libs.translate import trans
-
-init(autoreset=True)
-
-from bot.controller.start import start
-from bot.controller.commands.cancel import cancel
-from bot.controller.commands.config import config
-from bot.controller.moderator import moderator
-from bot.controller.notifications import notifications, alarm_notifications
-from bot.controller.subscription import subscription
-from bot.controller.unsubscription import unsubscription
-from bot.libs.redis_persistence import RedisPersistence
-
-from bot.db.manager import sync_db
-from bot.settings import settings
-
-# Enable logging
-logging.basicConfig(
-    format="<%(lineno)d> [%(asctime)s] - [%(filename)s / %(funcName)s] - [%(levelname)s] -> %(message)s",
-    level=logging.INFO
-)
-
-# set a higher logging level for httpx to avoid all GET and POST requests being logged
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-logger = logging.getLogger(__name__)
-
-DATABASE_CONFIG = {
-    "connections": {
-        "default": f'sqlite://{settings.BASE_DIR / settings.DB_NAME}'
-    },
-    "apps": {
-        "models": {
-            "models": ['bot.db.models'],
-            "default_connection": "default",
-        }
-    },
-}
+from bot.libs.redis_persistence import RedisJSONPersistence
+from bot.services.api import ViasEcuadorAPI
+from bot.services.notification_engine import NotificationEngine
+from bot.services.notification_policy import NotificationPolicy
+from bot.services.scheduler import AsyncScheduler
+from bot.services.subscription_service import SubscriptionService
+from bot.services.via_service import ViaService
 
 
-async def init_db():
-    """
-    Initializes the Tortoise ORM and generates database schemas asynchronously.
-    """
-    await Tortoise.init(config=DATABASE_CONFIG)
-    await Tortoise.generate_schemas()
+def setup_logging() -> None:
+    """Configure structured logging for the bot process."""
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-async def close_db():
-    """
-    Closes all database connections managed by Tortoise ORM.
-    """
-    await Tortoise.close_connections()
+async def post_init(application: Application) -> None:
+    """Start background scheduler after app initialization."""
+    scheduler = application.bot_data.get("scheduler")
+    if isinstance(scheduler, AsyncScheduler):
+        await scheduler.start()
 
 
-def start_sync_db_task() -> asyncio.Task:
-    """
-    Inicia la sincronización de base de datos en el mismo event-loop de la app.
-
-    Esto evita errores de contexto de Tortoise al ejecutar ORM en otro hilo.
-    """
-    task = asyncio.create_task(sync_db(), name="sync-db")
-    logger.info("Tarea de sincronización de DB iniciada")
-    return task
+async def post_shutdown(application: Application) -> None:
+    """Stop background scheduler before shutdown completes."""
+    scheduler = application.bot_data.get("scheduler")
+    if isinstance(scheduler, AsyncScheduler):
+        await scheduler.stop()
 
 
-async def run_application():
-    """
-    Función asíncrona principal que ejecuta la aplicación del bot.
-    """
-    sync_task: asyncio.Task | None = None
-    try:
-        # Inicializar base de datos
-        await init_db()
-        logger.info("Base de datos inicializada correctamente")
+async def create_application() -> Application:
+    """Build and configure the Telegram application and background services."""
+    token = os.getenv("TELEGRAM_KEY_BOT", "")
+    if not token:
+        raise ValueError("TELEGRAM_KEY_BOT environment variable is required")
 
-        # Configurar persistencia y aplicación
-        persistence = RedisPersistence(settings.REDIS_URL)
-        app = ApplicationBuilder().token(settings.TELEGRAM_KEY_BOT).persistence(persistence).build()
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    via_cache_ttl = int(os.getenv("VIA_CACHE_TTL", "60"))
+    max_concurrent_sends = int(os.getenv("MAX_CONCURRENT_SENDS", "20"))
 
-        # Configurar conversation handler
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('start', start),
-                          MessageHandler(filters.TEXT & filters.COMMAND, start)],
-            states={
-                settings.MODERATOR: [MessageHandler(filters.TEXT, moderator)],
-                settings.SUBSCRIPTION: [MessageHandler(filters.TEXT, subscription)],
-                settings.NOTIFICATIONS: [MessageHandler(filters.TEXT, notifications)],
-                settings.ALARM_NOTIFICATIONS: [MessageHandler(filters.TEXT, alarm_notifications)],
-                settings.UNSUBSCRIPTION: [MessageHandler(filters.TEXT, unsubscription)],
-                settings.CONFIG: [MessageHandler(filters.TEXT, config)],
-            },
-            fallbacks=[MessageHandler(filters.Regex(f"^{trans.moderator.menu.btns.stop}$"), cancel)],
-        )
+    persistence = RedisJSONPersistence(redis_url=redis_url)
 
-        app.add_handler(conv_handler)
-        logger.info("Iniciando Ejecucion de @ViasEC_bot")
+    subscription_service = SubscriptionService(persistence)
+    via_service = ViaService(http_client=ViasEcuadorAPI(), cache_ttl=via_cache_ttl)
+    notification_policy = NotificationPolicy()
 
-        # Inicializar y ejecutar el bot
-        async with app:
-            await app.initialize()
-            await app.start()
+    application = (
+        Application.builder()
+        .token(token)
+        .persistence(persistence)
+        .post_init(post_init)
+        .post_shutdown(post_shutdown)
+        .build()
+    )
 
-            # Iniciar sync_db dentro del mismo loop/contexto
-            sync_task = start_sync_db_task()
+    notification_engine = NotificationEngine(
+        via_service=via_service,
+        subscription_service=subscription_service,
+        notification_policy=notification_policy,
+        bot=application.bot,
+        max_concurrent_sends=max_concurrent_sends,
+    )
 
-            # Ejecutar polling
-            await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    scheduler = AsyncScheduler(
+        interval_seconds=60,
+        task_callable=notification_engine.run_cycle,
+    )
 
-            # Mantener el bot ejecutándose
-            try:
-                # Esperar indefinidamente hasta que se interrumpa
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                pass
-            finally:
-                # Detener polling y cerrar aplicación
-                await app.updater.stop()
-                await app.stop()
-                await app.shutdown()
+    application.bot_data["engine"] = notification_engine
+    application.bot_data["scheduler"] = scheduler
 
-    except Exception as e:
-        logger.error(f"Error al ejecutar la aplicación: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-    finally:
-        if sync_task:
-            sync_task.cancel()
-            try:
-                await sync_task
-            except asyncio.CancelledError:
-                logger.info("Tarea sync_db cancelada correctamente")
-            except Exception as e:
-                logger.error(f"Error al detener sync_db: {e}")
-
-        # Cerrar conexiones de base de datos
-        try:
-            await close_db()
-            logger.info("Conexiones de base de datos cerradas")
-        except Exception as e:
-            logger.error(f"Error al cerrar la base de datos: {e}")
+    return application
 
 
-def main():
-    """
-    Main function to initialize and run the application.
-    """
-    try:
-        # Ejecutar la aplicación asíncrona
-        asyncio.run(run_application())
-    except KeyboardInterrupt:
-        logger.info("Bot detenido por el usuario")
-    except Exception as e:
-        logger.error(f"Error crítico en main: {e}")
-        import traceback
-        traceback.print_exc()
+def main() -> None:
+    """Run polling application lifecycle."""
+    setup_logging()
+    application = asyncio.run(create_application())
+    application.run_polling()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
