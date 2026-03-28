@@ -134,7 +134,7 @@ async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # If called with argument (e.g., /vias Azuay)
     if context.args:
         province = " ".join(context.args).strip()
-        _, _, via_sync_service = _get_services(context)
+        _, _, via_sync_service, via_service = _get_services(context)
         if via_sync_service:
             try:
                 vias = await via_sync_service.get_vias_by_province(province)
@@ -158,7 +158,7 @@ async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return MENU
 
     # Show provinces for selection
-    _, _, via_sync_service = _get_services(context)
+    _, _, via_sync_service, via_service = _get_services(context)
     context.user_data["flow"] = "vias"  # Track that we're in via query mode
 
     if via_sync_service:
@@ -191,7 +191,7 @@ async def mysubscriptions_handler(update: Update, context: ContextTypes.DEFAULT_
     if message is None or user is None:
         return MENU
 
-    subscription_service, _, _ = _get_services(context)
+    subscription_service, _, _, _ = _get_services(context)
     if subscription_service is None:
         await message.reply_text("Servicio no disponible.", reply_markup=_main_menu_keyboard())
         return MENU
@@ -227,7 +227,7 @@ async def subscribe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # If called with argument (e.g., /subscribe azuay)
     if context.args:
         province = context.args[0].strip().lower()
-        subscription_service, _, _ = _get_services(context)
+        subscription_service, _, _, _ = _get_services(context)
         if subscription_service:
             try:
                 await subscription_service.subscribe(update.effective_user.id, province, [DEFAULT_SUBSCRIPTION_TIME])
@@ -262,7 +262,7 @@ async def unsubscribe_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if message is None or user is None:
         return MENU
 
-    subscription_service, _, _ = _get_services(context)
+    subscription_service, _, _, _ = _get_services(context)
     if subscription_service is None:
         await message.reply_text("Servicio no disponible.", reply_markup=_main_menu_keyboard())
         return MENU
@@ -350,7 +350,7 @@ async def config_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if message is None or user is None:
         return MENU
 
-    subscription_service, _, _ = _get_services(context)
+    subscription_service, _, _, _ = _get_services(context)
 
     # Get current subscriptions
     subs_text = "No tienes suscripciones activas."
@@ -407,7 +407,7 @@ async def config_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return SELECT_TIME
 
     if "Borrar" in text or "borrar" in text:
-        subscription_service, _, _ = _get_services(context)
+        subscription_service, _, _, _ = _get_services(context)
         if subscription_service:
             try:
                 await subscription_service.unsubscribe(user.id)
@@ -478,7 +478,7 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Handle unsubscription (text starts with 🗑️)
     if text.startswith("🗑️"):
         province = text.replace("🗑️ ", "").strip().lower()
-        subscription_service, _, _ = _get_services(context)
+        subscription_service, _, _, _ = _get_services(context)
         if subscription_service:
             try:
                 await subscription_service.unsubscribe(user.id, province)
@@ -638,7 +638,7 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             await message.reply_text("No hay provincias seleccionadas.", reply_markup=_main_menu_keyboard())
             return MENU
 
-        subscription_service, _, _ = _get_services(context)
+        subscription_service, _, _, _ = _get_services(context)
         if subscription_service:
             results = []
             for province in provinces:
@@ -663,7 +663,7 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if text in TIME_OPTIONS:
         # Check if we're in config mode (changing time for existing subscriptions)
         if context.user_data.get("config_mode") == "change_time":
-            subscription_service, _, _ = _get_services(context)
+            subscription_service, _, _, _ = _get_services(context)
             if subscription_service:
                 try:
                     data = await subscription_service.get_user_subscriptions(user.id)
