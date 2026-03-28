@@ -39,6 +39,7 @@ class ViasEcuadorAPI:
 
     def get_states_vias(self):
         try:
+            logger.info("Fetching vias from: %s", self.url[:80])
             response = self.session.get(
                 self.url,
                 headers=HEADERS,
@@ -47,15 +48,15 @@ class ViasEcuadorAPI:
             )
             response.raise_for_status()
             vias = response.json()
+            data = vias.get('data', []) if isinstance(vias, dict) else []
+            logger.info("API returned %d via records", len(data) if isinstance(data, list) else 0)
+            return data if isinstance(data, list) else []
         except requests.RequestException as exc:
             logger.error("Error consultando API de vías: %s", exc)
             return []
         except ValueError as exc:
             logger.error("Respuesta JSON inválida de API de vías: %s", exc)
             return []
-
-        data = vias.get('data', []) if isinstance(vias, dict) else []
-        return data if isinstance(data, list) else []
 
 if __name__ == '__main__':
     api = ViasEcuadorAPI()

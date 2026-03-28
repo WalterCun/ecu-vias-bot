@@ -222,9 +222,11 @@ class ViaSyncService:
 
     async def get_vias_from_api(self, province: str, via_service: Any) -> list[dict[str, Any]]:
         """Fallback: get vias directly from API via ViaService (no DB needed)."""
+        LOGGER.info("Fallback: querying API directly for province: %s", province)
         try:
             vias_by_province = await via_service.get_latest_vias()
             rows = vias_by_province.get(province.lower(), [])
+            LOGGER.info("API returned %d rows for province %s", len(rows), province)
             return [
                 {
                     "descripcion": row.get("descripcion", "?"),

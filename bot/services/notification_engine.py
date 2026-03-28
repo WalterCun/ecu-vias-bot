@@ -128,6 +128,7 @@ class NotificationEngine:
 
     async def run_cycle(self) -> None:
         """Run one notification cycle: fetch, compare, check schedules, notify."""
+        LOGGER.debug("Running notification cycle...")
         try:
             latest_vias = await self.via_service.get_latest_vias()
         except Exception as exc:  # noqa: BLE001
@@ -141,6 +142,7 @@ class NotificationEngine:
         # First cycle: just store snapshot
         if not self._last_vias:
             self._last_vias = copy.deepcopy(latest_vias)
+            LOGGER.info("Initial vias snapshot stored (%d provinces)", len(latest_vias))
             return
 
         try:
@@ -154,6 +156,12 @@ class NotificationEngine:
             LOGGER.error("Invalid policy output; expected dict, got %s", type(changes).__name__)
             self._last_vias = copy.deepcopy(latest_vias)
             return
+
+        changes_detected = {p: c for p, c in changes.items() if any(c.get(t) for t in ("new", "removed", "updated"))}
+        if changes_detected:
+            LOGGER.info("Changes detected in %d province(s): %s", len(changes_detected), list(changes_detected.keys()))
+        else:
+            LOGGER.debug("No changes detected")
 
         now_ec = datetime.now(ECUADOR_TZ)
 
