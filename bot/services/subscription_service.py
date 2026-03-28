@@ -43,8 +43,22 @@ class SubscriptionService:
             validated.add(candidate)
         return sorted(validated)
 
+    async def _ensure_db(self) -> None:
+        """Ensure Tortoise ORM is initialized in this async context."""
+        from tortoise import Tortoise
+        from bot.services.via_sync_service import TORTOISE_CONFIG
+        if not Tortoise._inited:
+            try:
+                await Tortoise.init(config=TORTOISE_CONFIG)
+                await Tortoise.generate_schemas(safe=True)
+                LOGGER.info("Tortoise initialized for subscriptions")
+            except Exception as exc:
+                LOGGER.error("Failed to init Tortoise for subscriptions: %s", exc)
+                raise
+
     async def subscribe(self, user_id: int, province: str, times: list[str]) -> dict:
         """Subscribe a user to a province and notification times."""
+        await self._ensure_db()
         normalized_province = self._validate_province(province)
         normalized_times = self._normalize_times(times)
 
@@ -76,6 +90,7 @@ class SubscriptionService:
 
     async def unsubscribe(self, user_id: int, province: str | None = None) -> dict:
         """Deactivate subscriptions for a user."""
+        await self._ensure_db()
         if province is None:
             # Deactivate all
             await Subscription.filter(user_id=user_id).update(active=False)
@@ -93,6 +108,7 @@ class SubscriptionService:
 
     async def get_user_subscriptions(self, user_id: int) -> dict:
         """Return active subscriptions grouped by province."""
+        await self._ensure_db()
         subs = await Subscription.filter(
             user_id=user_id,
             active=True,
@@ -114,6 +130,7 @@ class SubscriptionService:
 
     async def list_subscribers_by_province(self, province: str) -> list[int]:
         """List user IDs subscribed to a province."""
+        await self._ensure_db()
         normalized = self._validate_province(province)
         subs = await Subscription.filter(
             province=normalized,
