@@ -205,9 +205,16 @@ async def echo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 def register_handlers(application: Application) -> None:
     """Register core command and message handlers on the application."""
+    # User commands
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("vias", vias_handler))
     application.add_handler(CommandHandler("subscribe", subscribe_handler))
     application.add_handler(CommandHandler("unsubscribe", unsubscribe_handler))
     application.add_handler(CommandHandler("mysubscriptions", mysubscriptions_handler))
+
+    # Admin commands
+    from bot.handlers.admin import register_admin_handlers
+    register_admin_handlers(application)
+
+    # Echo (fallback)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_handler))
