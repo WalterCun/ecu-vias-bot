@@ -62,9 +62,13 @@ class RedisJSONPersistence(BasePersistence):
 
     def _serialize_value(self, data: Any) -> str:
         """Serialize any JSON-compatible value, skipping non-serializable objects."""
+        skipped_types: set[str] = set()
+
         def _default_serializer(obj):
-            # Skip service objects, schedulers, etc.
-            LOGGER.debug("Skipping non-serializable object: %s", type(obj).__name__)
+            type_name = type(obj).__name__
+            if type_name not in skipped_types:
+                skipped_types.add(type_name)
+                LOGGER.debug("Persistence: skipping non-serializable types: %s", type_name)
             return None
 
         if orjson is not None:
