@@ -75,6 +75,7 @@ class ViaService:
         """Return latest vias grouped by province, using in-memory TTL cache."""
         now = time.monotonic()
         if self._is_cache_fresh(now):
+            LOGGER.debug("Returning cached vias (%d provinces)", len(self._cache_by_province))
             return {province: rows[:] for province, rows in self._cache_by_province.items()}
 
         async with self._lock:
@@ -82,6 +83,7 @@ class ViaService:
             if self._is_cache_fresh(now):
                 return {province: rows[:] for province, rows in self._cache_by_province.items()}
 
+            LOGGER.info("Fetching fresh vias from API...")
             try:
                 payload = await self._fetch_payload()
             except Exception as exc:  # noqa: BLE001
@@ -89,6 +91,7 @@ class ViaService:
                 return {province: rows[:] for province, rows in self._cache_by_province.items()}
 
             rows = self._extract_rows(payload)
+            LOGGER.info("Received %d rows from API", len(rows))
             grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
             for row in rows:

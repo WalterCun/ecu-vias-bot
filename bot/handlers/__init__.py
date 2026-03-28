@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
@@ -15,6 +16,8 @@ from telegram.ext import (
 )
 
 from bot.settings.const import PROVINCES
+
+LOGGER = logging.getLogger(__name__)
 
 # Conversation states
 MENU, SELECT_PROVINCE, SELECT_TIME, CONFIG_MENU = range(4)
@@ -87,6 +90,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if message is None or user is None:
         return MENU
 
+    LOGGER.info("User %s (%s) started bot", user.id, user.first_name)
     name = user.first_name or "Usuario"
     await message.reply_text(
         f"🛣️ *¡Hola {name}! Bienvenido al Bot de Vías ECU*\n\n"
@@ -315,6 +319,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     """Handle main menu button presses."""
     message = update.effective_message
     text = message.text if message else ""
+    user = update.effective_user
+
+    LOGGER.info("User %s pressed menu: %s", user.id if user else "?", text[:30])
 
     if "Consultar Vías" in text or "vias" in text.lower():
         return await vias_handler(update, context)
@@ -502,6 +509,7 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # === FLOW: Consultar Vías ===
     if flow == "vias":
         query_province = matched_province or province
+        LOGGER.info("User %s querying vias for: %s", user.id, query_province)
         _, _, via_sync_service, via_service = _get_services(context)
 
         vias = []
@@ -583,6 +591,7 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return MENU
 
     # === FLOW: Suscribirse ===
+    LOGGER.info("User %s selected province: %s (subscribe flow)", user.id, matched_province or province)
     if not matched_province:
         await message.reply_text(
             f"No reconozco \"{province}\". Selecciona una provincia de la lista:",
@@ -622,6 +631,8 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if text == "✅ Confirmar":
         provinces = context.user_data.get("subscribe_provinces", [])
         times = context.user_data.get("subscribe_times", [DEFAULT_SUBSCRIPTION_TIME])
+
+        LOGGER.info("User %s confirming subscription: provinces=%s, times=%s", user.id, provinces, times)
 
         if not provinces:
             await message.reply_text("No hay provincias seleccionadas.", reply_markup=_main_menu_keyboard())
