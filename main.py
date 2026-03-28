@@ -23,12 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging() -> None:
-    """Configure structured logging for the bot process."""
+    """Configure structured logging — only show our code and DB sync."""
+    level = "DEBUG" if settings.DEBUG else "INFO"
+
     logging.basicConfig(
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        level="DEBUG" if settings.DEBUG else "INFO",
+        level=level,
     )
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    # Silence noisy third-party libraries
+    for lib in ("httpcore", "httpx", "telegram", "telegram.ext", "urllib3", "requests", "asyncio"):
+        logging.getLogger(lib).setLevel(logging.WARNING)
 
 
 async def post_init(application: Application) -> None:
