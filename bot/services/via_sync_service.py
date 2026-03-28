@@ -73,6 +73,22 @@ class ViaSyncService:
             LOGGER.error("DB not initialized, skipping sync")
             return {"created": 0, "updated": 0, "unchanged": 0, "errors": 0}
 
+        # Ensure Tortoise connection is alive
+        try:
+            conn = Tortoise.get_connection("default")
+            await conn.execute_query("SELECT 1")
+        except Exception:
+            LOGGER.warning("DB connection lost, reconnecting...")
+            try:
+                await Tortoise.close_connections()
+                await Tortoise.init(config=TORTOISE_CONFIG)
+                await Tortoise.generate_schemas(safe=True)
+                LOGGER.info("DB reconnected successfully")
+            except Exception as exc:
+                LOGGER.error("Failed to reconnect DB: %s", exc)
+                return {"created": 0, "updated": 0, "unchanged": 0, "errors": len(api_data)}
+
+        LOGGER.info("Starting sync with %d records from API", len(api_data))
         stats = {"created": 0, "updated": 0, "unchanged": 0, "errors": 0}
         now = datetime.now(ECUADOR_TZ)
 
@@ -201,6 +217,20 @@ class ViaSyncService:
         if not self._initialized:
             LOGGER.warning("DB not initialized for get_vias_by_province")
             return []
+
+        # Ensure connection alive
+        try:
+            conn = Tortoise.get_connection("default")
+            await conn.execute_query("SELECT 1")
+        except Exception:
+            LOGGER.warning("DB connection lost in get_vias_by_province, reconnecting...")
+            try:
+                await Tortoise.close_connections()
+                await Tortoise.init(config=TORTOISE_CONFIG)
+                await Tortoise.generate_schemas(safe=True)
+            except Exception as exc:
+                LOGGER.error("Failed to reconnect: %s", exc)
+                return []
 
         vias = await Via.filter(
             provincia__descripcion__iexact=province
