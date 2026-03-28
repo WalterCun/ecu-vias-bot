@@ -109,3 +109,4 @@ class ViaService:
             self._last_refresh_at = refreshed_at
 
             return {province: province_rows[:] for province, province_rows in new_cache.items()}
+

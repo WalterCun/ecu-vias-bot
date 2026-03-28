@@ -145,7 +145,7 @@ class ViaSyncService:
         if estado_nombre:
             estado_actual, _ = await EstadoActual.get_or_create(nombre=estado_nombre)
 
-        # API uses "GroupDetail" with "nombre" field, not "CategoriaVia"
+        # API uses "GroupDetail" with the "nombre" field, not "CategoriaVia"
         cat_nombre = group_detail.get("nombre", "").strip()
         categoria = None
         if cat_nombre:
@@ -176,7 +176,7 @@ class ViaSyncService:
             else:
                 stats["unchanged"] += 1
         else:
-            # Create new record
+            # Create a new record
             via = await Via.create(
                 descripcion=via_desc,
                 codigo=row.get("id"),
