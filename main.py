@@ -16,6 +16,7 @@ from bot.services.notification_policy import NotificationPolicy
 from bot.services.scheduler import AsyncScheduler
 from bot.services.subscription_service import SubscriptionService
 from bot.services.via_service import ViaService
+from bot.services.via_sync_service import ViaSyncService
 
 
 def setup_logging() -> None:
@@ -28,17 +29,60 @@ def setup_logging() -> None:
 
 
 async def post_init(application: Application) -> None:
-    """Start background scheduler after app initialization."""
+    """Initialize DB and start background schedulers after app initialization."""
+    # Init Tortoise ORM
+    via_sync = application.bot_data.get("via_sync_service")
+    if isinstance(via_sync, ViaSyncService):
+        await via_sync.init_db()
+
+    # Run initial sync
+    await _run_db_sync(application)
+
+    # Start scheduler(s)
     scheduler = application.bot_data.get("scheduler")
     if isinstance(scheduler, AsyncScheduler):
         await scheduler.start()
 
+    db_scheduler = application.bot_data.get("db_scheduler")
+    if isinstance(db_scheduler, AsyncScheduler):
+        await db_scheduler.start()
+
 
 async def post_shutdown(application: Application) -> None:
-    """Stop background scheduler before shutdown completes."""
+    """Stop background services and close DB before shutdown."""
     scheduler = application.bot_data.get("scheduler")
     if isinstance(scheduler, AsyncScheduler):
         await scheduler.stop()
+
+    db_scheduler = application.bot_data.get("db_scheduler")
+    if isinstance(db_scheduler, AsyncScheduler):
+        await db_scheduler.stop()
+
+    via_sync = application.bot_data.get("via_sync_service")
+    if isinstance(via_sync, ViaSyncService):
+        await via_sync.close_db()
+
+
+async def _run_db_sync(application: Application) -> None:
+    """Fetch API data and sync to database."""
+    via_service = application.bot_data.get("via_service")
+    via_sync = application.bot_data.get("via_sync_service")
+
+    if not via_service or not via_sync:
+        return
+
+    try:
+        vias_by_province = await via_service.get_latest_vias()
+        all_rows = []
+        for rows in vias_by_province.values():
+            all_rows.extend(rows)
+
+        if all_rows:
+            await via_sync.sync_vias(all_rows)
+        else:
+            logging.getLogger(__name__).warning("No API data to sync to DB")
+    except Exception as exc:
+        logging.getLogger(__name__).error("DB sync cycle failed: %s", exc)
 
 
 async def create_application() -> Application:
@@ -50,11 +94,13 @@ async def create_application() -> Application:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     via_cache_ttl = int(os.getenv("VIA_CACHE_TTL", "60"))
     max_concurrent_sends = int(os.getenv("MAX_CONCURRENT_SENDS", "20"))
+    db_sync_interval = int(os.getenv("DB_SYNC_INTERVAL_SECONDS", "900"))  # 15 min default
 
     persistence = RedisJSONPersistence(redis_url=redis_url)
 
     subscription_service = SubscriptionService(persistence)
     via_service = ViaService(http_client=ViasEcuadorAPI(), cache_ttl=via_cache_ttl)
+    via_sync_service = ViaSyncService()
     notification_policy = NotificationPolicy()
 
     application = (
@@ -76,15 +122,27 @@ async def create_application() -> Application:
         max_concurrent_sends=max_concurrent_sends,
     )
 
+    # Notification scheduler (every 60s)
     scheduler = AsyncScheduler(
         interval_seconds=60,
         task_callable=notification_engine.run_cycle,
     )
 
+    # DB sync scheduler (configurable, default 15 min)
+    async def db_sync_task() -> None:
+        await _run_db_sync(application)
+
+    db_scheduler = AsyncScheduler(
+        interval_seconds=db_sync_interval,
+        task_callable=db_sync_task,
+    )
+
     application.bot_data["subscription_service"] = subscription_service
     application.bot_data["via_service"] = via_service
+    application.bot_data["via_sync_service"] = via_sync_service
     application.bot_data["engine"] = notification_engine
     application.bot_data["scheduler"] = scheduler
+    application.bot_data["db_scheduler"] = db_scheduler
 
     return application
 
