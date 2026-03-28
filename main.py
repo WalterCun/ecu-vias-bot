@@ -41,19 +41,30 @@ async def post_init(application: Application) -> None:
     # Init Tortoise ORM
     via_sync = application.bot_data.get("via_sync_service")
     if isinstance(via_sync, ViaSyncService):
-        await via_sync.init_db()
+        try:
+            await via_sync.init_db()
+            logger.info("DB initialized successfully")
+        except Exception as exc:
+            logger.error("Failed to init DB: %s — sync disabled", exc)
 
     # Run initial sync
-    await _run_db_sync(application)
+    try:
+        await _run_db_sync(application)
+    except Exception as exc:
+        logger.error("Initial DB sync failed: %s — will retry on schedule", exc)
 
-    # Start scheduler(s)
+    # Start notification scheduler
     scheduler = application.bot_data.get("scheduler")
     if isinstance(scheduler, AsyncScheduler):
         await scheduler.start()
 
+    # Start DB sync scheduler
     db_scheduler = application.bot_data.get("db_scheduler")
     if isinstance(db_scheduler, AsyncScheduler):
         await db_scheduler.start()
+        logger.info("DB sync scheduler started (every %ss)", db_scheduler.interval_seconds)
+    else:
+        logger.warning("DB sync scheduler not found in bot_data")
 
 
 async def post_shutdown(application: Application) -> None:
