@@ -90,8 +90,8 @@ async def post_init(application: Application) -> None:
     """Initialize ALL services and schedule jobs. This runs after bot starts."""
     logger.info("Initializing services...")
 
-    # Create services HERE (bot_data is stable at this point)
-    persistence = RedisJSONPersistence(redis_url=settings.REDIS_URL)
+    # Use the SAME persistence as Telegram (not a new one)
+    persistence = application.persistence
     subscription_service = SubscriptionService(persistence)
     via_service = ViaService(http_client=ViasEcuadorAPI(), cache_ttl=settings.VIA_CACHE_TTL)
     via_sync_service = ViaSyncService()

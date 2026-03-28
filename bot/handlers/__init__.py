@@ -51,12 +51,16 @@ def _main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
-def _provinces_keyboard() -> ReplyKeyboardMarkup:
-    """Build keyboard with Ecuador provinces."""
+def _provinces_keyboard(selected: list[str] | None = None) -> ReplyKeyboardMarkup:
+    """Build keyboard with Ecuador provinces. Selected ones get ✓ prefix."""
+    selected = selected or []
+    selected_lower = {s.lower() for s in selected}
+
     keyboard = []
     row = []
     for i, province in enumerate(PROVINCES):
-        row.append(KeyboardButton(province))
+        label = f"✅ {province}" if province.lower() in selected_lower else province
+        row.append(KeyboardButton(label))
         if len(row) == 3:
             keyboard.append(row)
             row = []
@@ -66,12 +70,16 @@ def _provinces_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
-def _time_keyboard() -> ReplyKeyboardMarkup:
-    """Build keyboard with time options."""
+def _time_keyboard(selected: list[str] | None = None) -> ReplyKeyboardMarkup:
+    """Build keyboard with time options. Selected ones get ✓ prefix."""
+    selected = selected or []
+    selected_set = set(selected)
+
     keyboard = []
     row = []
     for i, time_opt in enumerate(TIME_OPTIONS):
-        row.append(KeyboardButton(time_opt))
+        label = f"✅ {time_opt}" if time_opt in selected_set else time_opt
+        row.append(KeyboardButton(label))
         if len(row) == 4:
             keyboard.append(row)
             row = []
@@ -150,7 +158,7 @@ async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                         lines.append(f"\n_...y {len(vias) - 15} vías más_")
                     await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=_main_menu_keyboard())
                 else:
-                    await message.reply_text(f"No hay vías para *{province}*. Usa el menú para seleccionar.", parse_mode="Markdown", reply_markup=_provinces_keyboard())
+                    await message.reply_text(f"No hay vías para *{province}*. Usa el menú para seleccionar.", parse_mode="Markdown", reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])))
             except Exception:
                 await message.reply_text("Error al consultar la base de datos.", reply_markup=_main_menu_keyboard())
         else:
@@ -170,7 +178,7 @@ async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                     f"📍 *Provincias con datos:*\n{provinces_list}\n\n"
                     "Escribe el nombre de la provincia o usa /vias <provincia>",
                     parse_mode="Markdown",
-                    reply_markup=_provinces_keyboard(),
+                    reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])),
                 )
                 return SELECT_PROVINCE
         except Exception:
@@ -179,7 +187,7 @@ async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Fallback: show all provinces
     await message.reply_text(
         "Selecciona una provincia para ver el estado de sus vías:",
-        reply_markup=_provinces_keyboard(),
+        reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])),
     )
     return SELECT_PROVINCE
 
@@ -250,7 +258,7 @@ async def subscribe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         "Selecciona las provincias que te interesan.\n"
         "Presiona ✅ Continuar cuando termines.",
         parse_mode="Markdown",
-        reply_markup=_provinces_keyboard(),
+        reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])),
     )
     return SELECT_PROVINCE
 
@@ -402,7 +410,7 @@ async def config_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["config_mode"] = "change_time"
         await message.reply_text(
             "🕐 Selecciona tu horario preferido para recibir notificaciones:",
-            reply_markup=_time_keyboard(),
+            reply_markup=_time_keyboard(context.user_data.get("subscribe_times", [])),
         )
         return SELECT_TIME
 
@@ -471,7 +479,7 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             f"Provincias: {', '.join(provinces)}\n\n"
             "Selecciona la hora en que quieres recibir notificaciones:",
             parse_mode="Markdown",
-            reply_markup=_time_keyboard(),
+            reply_markup=_time_keyboard(context.user_data.get("subscribe_times", [])),
         )
         return SELECT_TIME
 
@@ -595,7 +603,7 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not matched_province:
         await message.reply_text(
             f"No reconozco \"{province}\". Selecciona una provincia de la lista:",
-            reply_markup=_provinces_keyboard(),
+            reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])),
         )
         return SELECT_PROVINCE
 
@@ -610,7 +618,7 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"Seleccionadas: {', '.join(selected)}\n\n"
         "Selecciona más provincias o presiona ✅ Continuar.",
         parse_mode="Markdown",
-        reply_markup=_provinces_keyboard(),
+        reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])),
     )
     return SELECT_PROVINCE
 
@@ -625,7 +633,7 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return SELECT_TIME
 
     if text == "🔙 Volver":
-        await message.reply_text("Selecciona provincias:", reply_markup=_provinces_keyboard())
+        await message.reply_text("Selecciona provincias:", reply_markup=_provinces_keyboard(context.user_data.get("subscribe_provinces", [])))
         return SELECT_PROVINCE
 
     if text == "✅ Confirmar":
@@ -687,11 +695,11 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             f"🕐 Hora seleccionada: *{text}*\n\n"
             "Presiona ✅ Confirmar para guardar.",
             parse_mode="Markdown",
-            reply_markup=_time_keyboard(),
+            reply_markup=_time_keyboard(context.user_data.get("subscribe_times", [])),
         )
         return SELECT_TIME
 
-    await message.reply_text("Selecciona una hora válida:", reply_markup=_time_keyboard())
+    await message.reply_text("Selecciona una hora válida:", reply_markup=_time_keyboard(context.user_data.get("subscribe_times", [])))
     return SELECT_TIME
 
 
