@@ -29,12 +29,13 @@ TIME_OPTIONS = [
 ]
 
 
-def _get_services(context: ContextTypes.DEFAULT_TYPE) -> tuple[Any, Any, Any]:
+def _get_services(context: ContextTypes.DEFAULT_TYPE) -> tuple[Any, Any, Any, Any]:
     """Get service instances from application bot_data."""
     subscription_service = context.application.bot_data.get("subscription_service")
     notification_engine = context.application.bot_data.get("engine")
     via_sync_service = context.application.bot_data.get("via_sync_service")
-    return subscription_service, notification_engine, via_sync_service
+    via_service = context.application.bot_data.get("via_service")
+    return subscription_service, notification_engine, via_sync_service, via_service
 
 
 def _main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -501,63 +502,82 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # === FLOW: Consultar Vías ===
     if flow == "vias":
         query_province = matched_province or province
-        _, _, via_sync_service = _get_services(context)
+        _, _, via_sync_service, via_service = _get_services(context)
 
+        vias = []
+
+        # Try DB first
         if via_sync_service:
             try:
                 vias = await via_sync_service.get_vias_by_province(query_province)
+            except Exception:
+                pass
 
-                if vias:
-                    # Format as table-like output
-                    lines = [f"🛣️ *Estado de vías — {query_province.title()}*\n"]
-                    lines.append("```")
-                    lines.append(f"{'Vía':<35} {'Estado':<15}")
-                    lines.append("-" * 50)
+        # Fallback: query API directly if DB is empty
+        if not vias and via_sync_service and via_service:
+            try:
+                vias = await via_sync_service.get_vias_from_api(query_province, via_service)
+            except Exception:
+                pass
 
-                    for via in vias[:20]:
-                        desc = via.get("descripcion", "?")
-                        estado = via.get("estado_actual") or via.get("estado", "?")
-                        icono = "🟢" if str(estado).lower() in ("abierta", "a", "activa") else "🔴"
-                        # Truncate long descriptions
-                        desc_short = desc[:32] + "..." if len(desc) > 32 else desc
-                        lines.append(f"{icono} {desc_short:<32} {estado}")
+        # Fallback: query ViaService directly
+        if not vias and via_service:
+            try:
+                vias_by_province = await via_service.get_latest_vias()
+                rows = vias_by_province.get(query_province.lower(), [])
+                vias = [
+                    {
+                        "descripcion": row.get("descripcion", "?"),
+                        "estado_actual": row.get("EstadoActual", {}).get("nombre", "?"),
+                        "observaciones": row.get("observaciones", ""),
+                    }
+                    for row in rows
+                ]
+            except Exception:
+                pass
 
-                    lines.append("```")
+        if vias:
+            # Format as table-like output
+            lines = [f"🛣️ *Estado de vías — {query_province.title()}*\n"]
+            lines.append("```")
+            lines.append(f"{'Vía':<35} {'Estado':<15}")
+            lines.append("-" * 50)
 
-                    if len(vias) > 20:
-                        lines.append(f"_...y {len(vias) - 20} vías más_")
+            for via in vias[:20]:
+                desc = via.get("descripcion", "?")
+                estado = via.get("estado_actual") or via.get("estado", "?")
+                icono = "🟢" if str(estado).lower() in ("abierta", "a", "activa") else "🔴"
+                desc_short = desc[:32] + "..." if len(desc) > 32 else desc
+                lines.append(f"{icono} {desc_short:<32} {estado}")
 
-                    # Show observations for flagged vias
-                    obs_lines = []
-                    for via in vias[:20]:
-                        obs = via.get("observaciones", "")
-                        if obs:
-                            obs_lines.append(f"• _{via.get('descripcion', '?')}_: {obs}")
+            lines.append("```")
 
-                    if obs_lines:
-                        lines.append("\n📝 *Observaciones:*")
-                        lines.extend(obs_lines[:5])
+            if len(vias) > 20:
+                lines.append(f"_...y {len(vias) - 20} vías más_")
 
-                    await message.reply_text(
-                        "\n".join(lines),
-                        parse_mode="Markdown",
-                        reply_markup=_main_menu_keyboard(),
-                    )
-                else:
-                    await message.reply_text(
-                        f"No hay datos de vías para *{query_province}*.\n"
-                        "La DB puede no haber sincronizado aún.",
-                        parse_mode="Markdown",
-                        reply_markup=_main_menu_keyboard(),
-                    )
-            except Exception as exc:
-                LOGGER.error("Error querying vias: %s", exc)
-                await message.reply_text(
-                    "Error al consultar la base de datos.",
-                    reply_markup=_main_menu_keyboard(),
-                )
+            # Show observations
+            obs_lines = []
+            for via in vias[:20]:
+                obs = via.get("observaciones", "")
+                if obs:
+                    obs_lines.append(f"• _{via.get('descripcion', '?')}_: {obs}")
+
+            if obs_lines:
+                lines.append("\n📝 *Observaciones:*")
+                lines.extend(obs_lines[:5])
+
+            await message.reply_text(
+                "\n".join(lines),
+                parse_mode="Markdown",
+                reply_markup=_main_menu_keyboard(),
+            )
         else:
-            await message.reply_text("Servicio de vías no disponible.", reply_markup=_main_menu_keyboard())
+            await message.reply_text(
+                f"No hay datos de vías para *{query_province}*.\n"
+                "Intenta con otra provincia o más tarde.",
+                parse_mode="Markdown",
+                reply_markup=_main_menu_keyboard(),
+            )
 
         context.user_data.pop("flow", None)
         return MENU
