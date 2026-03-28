@@ -17,7 +17,7 @@ from telegram.ext import (
 from bot.settings.const import PROVINCES
 
 # Conversation states
-MENU, SELECT_PROVINCE, SELECT_TIME = range(3)
+MENU, SELECT_PROVINCE, SELECT_TIME, CONFIG_MENU = range(4)
 
 DEFAULT_SUBSCRIPTION_TIME = "08:00"
 
@@ -42,7 +42,7 @@ def _main_menu_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton("🛣️ Consultar Vías"), KeyboardButton("📋 Mis Suscripciones")],
         [KeyboardButton("🔔 Suscribirse"), KeyboardButton("🔕 Cancelar Suscripción")],
-        [KeyboardButton("ℹ️ Ayuda")],
+        [KeyboardButton("⚙️ Configuración"), KeyboardButton("ℹ️ Ayuda")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
@@ -318,6 +318,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return await subscribe_start(update, context)
     elif "Cancelar" in text or "unsubscribe" in text.lower():
         return await unsubscribe_handler(update, context)
+    elif "Configuración" in text or "config" in text.lower():
+        return await config_handler(update, context)
     elif "Ayuda" in text or "help" in text.lower():
         return await help_handler(update, context)
     else:
@@ -326,6 +328,107 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             reply_markup=_main_menu_keyboard(),
         )
         return MENU
+
+
+async def config_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /config or 'Configuración' button — show user settings."""
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return MENU
+
+    subscription_service, _, _ = _get_services(context)
+
+    # Get current subscriptions
+    subs_text = "No tienes suscripciones activas."
+    if subscription_service:
+        try:
+            data = await subscription_service.get_user_subscriptions(user.id)
+            subscriptions = data.get("subscriptions", {}) if isinstance(data, dict) else {}
+            if subscriptions:
+                lines = []
+                for province, times in subscriptions.items():
+                    lines.append(f"  • {province}: {', '.join(times)}")
+                subs_text = "\n".join(lines)
+        except Exception:
+            pass
+
+    keyboard = [
+        [KeyboardButton("🕐 Cambiar Horario"), KeyboardButton("🌍 Cambiar Idioma")],
+        [KeyboardButton("🗑️ Borrar Todas las Suscripciones")],
+        [KeyboardButton("🔙 Volver")],
+    ]
+
+    await message.reply_text(
+        f"⚙️ *Configuración*\n\n"
+        f"👤 Usuario: {user.first_name}\n"
+        f"🆔 ID: `{user.id}`\n\n"
+        f"📋 *Suscripciones activas:*\n{subs_text}\n\n"
+        "¿Qué deseas cambiar?",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+    )
+    return CONFIG_MENU
+
+
+async def config_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle configuration menu options."""
+    message = update.effective_message
+    user = update.effective_user
+    text = message.text if message else ""
+
+    if message is None or user is None:
+        return CONFIG_MENU
+
+    if "Volver" in text or "volver" in text:
+        await message.reply_text("Menú principal:", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    if "Cambiar Horario" in text:
+        # Show time selection
+        context.user_data["config_mode"] = "change_time"
+        await message.reply_text(
+            "🕐 Selecciona tu horario preferido para recibir notificaciones:",
+            reply_markup=_time_keyboard(),
+        )
+        return SELECT_TIME
+
+    if "Borrar" in text or "borrar" in text:
+        subscription_service, _, _ = _get_services(context)
+        if subscription_service:
+            try:
+                await subscription_service.unsubscribe(user.id)
+                await message.reply_text(
+                    "🗑️ Todas las suscripciones eliminadas.",
+                    reply_markup=_main_menu_keyboard(),
+                )
+            except Exception:
+                await message.reply_text("Error al eliminar suscripciones.", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    if "Idioma" in text or "idioma" in text:
+        keyboard = [
+            [KeyboardButton("🇪🇸 Español"), KeyboardButton("🇺🇸 English")],
+            [KeyboardButton("🔙 Volver")],
+        ]
+        await message.reply_text(
+            "🌍 Selecciona tu idioma:",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+        )
+        return CONFIG_MENU
+
+    if "Español" in text:
+        context.user_data["lang"] = "es"
+        await message.reply_text("🇪🇸 Idioma configurado: Español", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    if "English" in text:
+        context.user_data["lang"] = "en"
+        await message.reply_text("🇺🇸 Language set: English", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    await message.reply_text("Selecciona una opción:", reply_markup=_main_menu_keyboard())
+    return CONFIG_MENU
 
 
 async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -472,6 +575,27 @@ async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     # Check if it's a time
     if text in TIME_OPTIONS:
+        # Check if we're in config mode (changing time for existing subscriptions)
+        if context.user_data.get("config_mode") == "change_time":
+            subscription_service, _, _ = _get_services(context)
+            if subscription_service:
+                try:
+                    data = await subscription_service.get_user_subscriptions(user.id)
+                    subscriptions = data.get("subscriptions", {}) if isinstance(data, dict) else {}
+                    for province in subscriptions:
+                        await subscription_service.subscribe(user.id, province, [text])
+                    context.user_data.pop("config_mode", None)
+                    await message.reply_text(
+                        f"🕐 Horario actualizado a *{text}* para todas las suscripciones.",
+                        parse_mode="Markdown",
+                        reply_markup=_main_menu_keyboard(),
+                    )
+                except Exception:
+                    await message.reply_text("Error al actualizar horario.", reply_markup=_main_menu_keyboard())
+            else:
+                await message.reply_text("Servicio no disponible.", reply_markup=_main_menu_keyboard())
+            return MENU
+
         context.user_data["subscribe_times"] = [text]
         await message.reply_text(
             f"🕐 Hora seleccionada: *{text}*\n\n"
@@ -528,6 +652,9 @@ def register_handlers(application: Application) -> None:
             SELECT_TIME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, time_selected),
             ],
+            CONFIG_MENU: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, config_menu_handler),
+            ],
         },
         fallbacks=[
             CommandHandler("start", start_handler),
@@ -539,3 +666,7 @@ def register_handlers(application: Application) -> None:
     )
 
     application.add_handler(conv_handler)
+
+    # Admin commands (registered AFTER conversation handler)
+    from bot.handlers.admin import register_admin_handlers
+    register_admin_handlers(application)
