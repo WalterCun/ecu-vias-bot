@@ -1,4 +1,4 @@
-from .via_model import Provincia, Canton, Centro, EstadoActual, CategoriaVia, ViaEstado, Via, ViaAlterna
+from .via_model import Provincia, Canton, Centro, EstadoActual, CategoriaVia, ViaEstado, Via, ViaAlterna, Subscription
 
 __all__ = [
     'Provincia',
@@ -9,4 +9,5 @@ __all__ = [
     'Via',
     'ViaAlterna',
     'ViaEstado',
+    'Subscription',
 ]

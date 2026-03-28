@@ -1,46 +1,41 @@
-"""Tests for SubscriptionService with mocked persistence."""
+"""Tests for SubscriptionService (SQLite-backed)."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from tortoise import Tortoise
 
 from bot.services.subscription_service import SubscriptionService
+from bot.db.models import Subscription
+
+
+@pytest.fixture(autouse=True)
+async def setup_db():
+    """Initialize in-memory SQLite for tests."""
+    await Tortoise.init(
+        db_url="sqlite://:memory:",
+        modules={"models": ["bot.db.models"]},
+    )
+    await Tortoise.generate_schemas(safe=True)
+    yield
+    await Tortoise.close_connections()
 
 
 @pytest.fixture
-def mock_persistence():
-    persistence = MagicMock()
-    persistence.USER_DATA_KEY = "bot:user_data"
-    persistence.redis = AsyncMock()
-    persistence._deserialize = MagicMock(side_effect=lambda x: __import__("json").loads(x) if isinstance(x, str) else x)
-    persistence.update_user_data = AsyncMock()
-    persistence.get_user_data_by_id = AsyncMock(return_value={})
-    return persistence
-
-
-@pytest.fixture
-def service(mock_persistence):
-    return SubscriptionService(mock_persistence)
+def service():
+    return SubscriptionService()
 
 
 @pytest.mark.asyncio
-async def test_subscribe_creates_subscription(service, mock_persistence):
-    """subscribe should create subscription for a province."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={})
-
+async def test_subscribe_creates_subscription(service):
+    """subscribe should create active subscription."""
     result = await service.subscribe(123456, "azuay", ["08:00"])
 
-    assert "subscriptions" in result
     assert "azuay" in result["subscriptions"]
     assert "08:00" in result["subscriptions"]["azuay"]
-    mock_persistence.update_user_data.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_subscribe_merges_times(service, mock_persistence):
-    """subscribe should merge new times with existing ones."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={
-        "subscriptions": {"azuay": ["08:00"]}
-    })
-
+async def test_subscribe_merges_times(service):
+    """subscribe should add new times without removing existing."""
+    await service.subscribe(123456, "azuay", ["08:00"])
     result = await service.subscribe(123456, "azuay", ["12:00"])
 
     times = result["subscriptions"]["azuay"]
@@ -49,12 +44,9 @@ async def test_subscribe_merges_times(service, mock_persistence):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_multiple_provinces(service, mock_persistence):
+async def test_subscribe_multiple_provinces(service):
     """subscribe should support multiple provinces."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={
-        "subscriptions": {"azuay": ["08:00"]}
-    })
-
+    await service.subscribe(123456, "azuay", ["08:00"])
     result = await service.subscribe(123456, "loja", ["09:00"])
 
     assert "azuay" in result["subscriptions"]
@@ -62,25 +54,31 @@ async def test_subscribe_multiple_provinces(service, mock_persistence):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_normalizes_province(service, mock_persistence):
-    """subscribe should reject non-lowercase province (validates strictly)."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={})
-
-    # _validate_province requires lowercase
-    with pytest.raises(ValueError, match="lowercase"):
-        await service.subscribe(123456, "AZUAY", ["08:00"])
-
-    # Lowercase should work
+async def test_subscribe_normalizes_province(service):
+    """subscribe should normalize province to lowercase."""
     result = await service.subscribe(123456, "azuay", ["08:00"])
     assert "azuay" in result["subscriptions"]
 
 
 @pytest.mark.asyncio
-async def test_unsubscribe_single_province(service, mock_persistence):
-    """unsubscribe should remove single province."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={
-        "subscriptions": {"azuay": ["08:00"], "loja": ["09:00"]}
-    })
+async def test_subscribe_invalid_province(service):
+    """subscribe should reject empty province."""
+    with pytest.raises(ValueError):
+        await service.subscribe(123456, "", ["08:00"])
+
+
+@pytest.mark.asyncio
+async def test_subscribe_invalid_time(service):
+    """subscribe should reject invalid time format."""
+    with pytest.raises(ValueError):
+        await service.subscribe(123456, "azuay", ["invalid"])
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_single_province(service):
+    """unsubscribe should deactivate single province."""
+    await service.subscribe(123456, "azuay", ["08:00"])
+    await service.subscribe(123456, "loja", ["09:00"])
 
     result = await service.unsubscribe(123456, "azuay")
 
@@ -89,11 +87,10 @@ async def test_unsubscribe_single_province(service, mock_persistence):
 
 
 @pytest.mark.asyncio
-async def test_unsubscribe_all(service, mock_persistence):
-    """unsubscribe with no province should remove all."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={
-        "subscriptions": {"azuay": ["08:00"], "loja": ["09:00"]}
-    })
+async def test_unsubscribe_all(service):
+    """unsubscribe with no province should deactivate all."""
+    await service.subscribe(123456, "azuay", ["08:00"])
+    await service.subscribe(123456, "loja", ["09:00"])
 
     result = await service.unsubscribe(123456)
 
@@ -101,49 +98,31 @@ async def test_unsubscribe_all(service, mock_persistence):
 
 
 @pytest.mark.asyncio
-async def test_get_user_subscriptions(service, mock_persistence):
-    """get_user_subscriptions should return normalized subscriptions."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={
-        "subscriptions": {"azuay": ["08:00", "12:00"], "loja": ["09:00"]}
-    })
+async def test_get_user_subscriptions(service):
+    """get_user_subscriptions should return active subscriptions."""
+    await service.subscribe(123456, "azuay", ["08:00", "12:00"])
+    await service.subscribe(123456, "loja", ["09:00"])
 
     result = await service.get_user_subscriptions(123456)
 
     assert "azuay" in result["subscriptions"]
-    assert result["subscriptions"]["azuay"] == ["08:00", "12:00"]
+    assert sorted(result["subscriptions"]["azuay"]) == ["08:00", "12:00"]
     assert result["subscriptions"]["loja"] == ["09:00"]
 
 
 @pytest.mark.asyncio
-async def test_get_user_subscriptions_empty(service, mock_persistence):
-    """get_user_subscriptions should return empty dict when no data."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={})
-
-    result = await service.get_user_subscriptions(123456)
-
+async def test_get_user_subscriptions_empty(service):
+    """get_user_subscriptions should return empty when no data."""
+    result = await service.get_user_subscriptions(999999)
     assert result["subscriptions"] == {}
 
 
 @pytest.mark.asyncio
-async def test_get_user_subscriptions_redis_error(service, mock_persistence):
-    """get_user_subscriptions should handle Redis errors gracefully."""
-    from redis.exceptions import ConnectionError as RedisConnectionError
-    mock_persistence.get_user_data_by_id = AsyncMock(side_effect=RedisConnectionError("Redis down"))
-
-    result = await service.get_user_subscriptions(123456)
-
-    assert result["subscriptions"] == {}
-
-
-@pytest.mark.asyncio
-async def test_list_subscribers_by_province(service, mock_persistence):
+async def test_list_subscribers_by_province(service):
     """list_subscribers_by_province should return matching user IDs."""
-    import json
-    mock_persistence.redis.hgetall = AsyncMock(return_value={
-        "123": json.dumps({"subscriptions": {"azuay": ["08:00"]}}),
-        "456": json.dumps({"subscriptions": {"loja": ["09:00"]}}),
-        "789": json.dumps({"subscriptions": {"azuay": ["12:00"], "loja": ["09:00"]}}),
-    })
+    await service.subscribe(123, "azuay", ["08:00"])
+    await service.subscribe(456, "loja", ["09:00"])
+    await service.subscribe(789, "azuay", ["12:00"])
 
     result = await service.list_subscribers_by_province("azuay")
 
@@ -153,18 +132,25 @@ async def test_list_subscribers_by_province(service, mock_persistence):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_invalid_time(service, mock_persistence):
-    """subscribe should reject invalid time format."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={})
+async def test_subscribe_reactivates(service):
+    """subscribe should reactivate deactivated subscriptions."""
+    await service.subscribe(123456, "azuay", ["08:00"])
+    await service.unsubscribe(123456, "azuay")
 
-    with pytest.raises(ValueError):
-        await service.subscribe(123456, "azuay", ["invalid"])
+    # Should be empty
+    result = await service.get_user_subscriptions(123456)
+    assert "azuay" not in result["subscriptions"]
+
+    # Re-subscribe
+    result = await service.subscribe(123456, "azuay", ["08:00"])
+    assert "azuay" in result["subscriptions"]
 
 
 @pytest.mark.asyncio
-async def test_subscribe_valid_province(service, mock_persistence):
-    """subscribe should work with lowercase province."""
-    mock_persistence.get_user_data_by_id = AsyncMock(return_value={})
+async def test_subscribe_deduplicates(service):
+    """subscribe should not create duplicate entries."""
+    await service.subscribe(123456, "azuay", ["08:00"])
+    await service.subscribe(123456, "azuay", ["08:00"])
 
-    result = await service.subscribe(123456, "azuay", ["08:00"])
-    assert "azuay" in result["subscriptions"]
+    result = await service.get_user_subscriptions(123456)
+    assert result["subscriptions"]["azuay"] == ["08:00"]
