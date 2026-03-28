@@ -54,15 +54,22 @@ class RedisJSONPersistence(BasePersistence):
         return self._serialize_value(data)
 
     def _deserialize(self, data: str) -> dict:
-        """Deserialize JSON string data into a dict."""
+        """Deserialize JSON string data into a dict, filtering out null values."""
         value = self._deserialize_value(data)
-        return value if isinstance(value, dict) else {}
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items() if v is not None}
+        return {}
 
     def _serialize_value(self, data: Any) -> str:
-        """Serialize any JSON-compatible value."""
+        """Serialize any JSON-compatible value, skipping non-serializable objects."""
+        def _default_serializer(obj):
+            # Skip service objects, schedulers, etc.
+            LOGGER.debug("Skipping non-serializable object: %s", type(obj).__name__)
+            return None
+
         if orjson is not None:
-            return orjson.dumps(data).decode("utf-8")
-        return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+            return orjson.dumps(data, default=_default_serializer).decode("utf-8")
+        return json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=_default_serializer)
 
     def _deserialize_value(self, data: str) -> Any:
         """Deserialize JSON string data into a Python object."""
