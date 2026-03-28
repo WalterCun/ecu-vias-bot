@@ -38,6 +38,8 @@ def setup_logging() -> None:
 
 async def post_init(application: Application) -> None:
     """Initialize DB and start background schedulers after app initialization."""
+    logger = logging.getLogger(__name__)
+
     # Init Tortoise ORM
     via_sync = application.bot_data.get("via_sync_service")
     if isinstance(via_sync, ViaSyncService):
@@ -58,13 +60,17 @@ async def post_init(application: Application) -> None:
     if isinstance(scheduler, AsyncScheduler):
         await scheduler.start()
 
-    # Start DB sync scheduler
-    db_scheduler = application.bot_data.get("db_scheduler")
-    if isinstance(db_scheduler, AsyncScheduler):
-        await db_scheduler.start()
-        logger.info("DB sync scheduler started (every %ss)", db_scheduler.interval_seconds)
-    else:
-        logger.warning("DB sync scheduler not found in bot_data")
+    # Create and start DB sync scheduler (here, not in create_application)
+    async def db_sync_task() -> None:
+        await _run_db_sync(application)
+
+    db_scheduler = AsyncScheduler(
+        interval_seconds=settings.DB_SYNC_INTERVAL_SECONDS,
+        task_callable=db_sync_task,
+    )
+    await db_scheduler.start()
+    application.bot_data["db_scheduler"] = db_scheduler
+    logger.info("DB sync scheduler started (every %ss)", settings.DB_SYNC_INTERVAL_SECONDS)
 
 
 async def post_shutdown(application: Application) -> None:
@@ -142,21 +148,14 @@ async def create_application() -> Application:
         task_callable=notification_engine.run_cycle,
     )
 
-    # DB sync scheduler (configurable, default 15 min)
-    async def db_sync_task() -> None:
-        await _run_db_sync(application)
-
-    db_scheduler = AsyncScheduler(
-        interval_seconds=settings.DB_SYNC_INTERVAL_SECONDS,
-        task_callable=db_sync_task,
-    )
-
     application.bot_data["subscription_service"] = subscription_service
     application.bot_data["via_service"] = via_service
     application.bot_data["via_sync_service"] = via_sync_service
     application.bot_data["engine"] = notification_engine
     application.bot_data["scheduler"] = scheduler
-    application.bot_data["db_scheduler"] = db_scheduler
+    # db_scheduler is created in post_init (needs running event loop)
+
+    logger.info("Services configured: notification scheduler every 60s")
 
     return application
 
