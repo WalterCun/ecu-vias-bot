@@ -154,6 +154,8 @@ async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     # Show provinces for selection
     _, _, via_sync_service = _get_services(context)
+    context.user_data["flow"] = "vias"  # Track that we're in via query mode
+
     if via_sync_service:
         try:
             provinces = await via_sync_service.get_all_provinces()
@@ -237,6 +239,7 @@ async def subscribe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Store selected provinces in context
     context.user_data["subscribe_provinces"] = []
+    context.user_data["flow"] = "subscribe"  # Track that we're in subscription mode
     await message.reply_text(
         "🔔 *Suscribirse a alertas de vías*\n\n"
         "Selecciona las provincias que te interesan.\n"
@@ -279,6 +282,8 @@ async def unsubscribe_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not subscriptions:
             await message.reply_text("No tienes suscripciones activas.", reply_markup=_main_menu_keyboard())
             return MENU
+
+        context.user_data["flow"] = "unsubscribe"
 
         # Build keyboard with subscribed provinces
         keyboard = []
@@ -432,7 +437,7 @@ async def config_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle province selection for subscription or via query."""
+    """Handle province selection for via query or subscription."""
     message = update.effective_message
     user = update.effective_user
     text = message.text if message else ""
@@ -440,13 +445,18 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if message is None or user is None:
         return SELECT_PROVINCE
 
-    # Handle navigation
+    # Handle navigation buttons
+    if text == "🔙 Volver" or text == "Volver":
+        context.user_data.pop("flow", None)
+        await message.reply_text("Menú principal:", reply_markup=_main_menu_keyboard())
+        return MENU
+
     if text == "✅ Continuar":
         provinces = context.user_data.get("subscribe_provinces", [])
         if not provinces:
             await message.reply_text("No seleccionaste ninguna provincia.", reply_markup=_main_menu_keyboard())
+            context.user_data.pop("flow", None)
             return MENU
-
         # Show time selection
         await message.reply_text(
             f"🕐 *Horarios de notificación*\n\n"
@@ -456,10 +466,6 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             reply_markup=_time_keyboard(),
         )
         return SELECT_TIME
-
-    if text == "🔙 Volver" or text == "Volver":
-        await message.reply_text("Menú principal:", reply_markup=_main_menu_keyboard())
-        return MENU
 
     # Handle unsubscription (text starts with 🗑️)
     if text.startswith("🗑️"):
@@ -475,40 +481,89 @@ async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 )
             except Exception:
                 await message.reply_text("Error al cancelar.", reply_markup=_main_menu_keyboard())
+        context.user_data.pop("flow", None)
         return MENU
 
-    # Check if it's a province name
+    # Normalize province name
     province = text.strip()
     province_lower = province.lower()
 
-    # Check against known provinces (case-insensitive)
+    # Match against known provinces
     matched_province = None
     for p in PROVINCES:
         if p.lower() == province_lower:
             matched_province = p
             break
 
-    if not matched_province:
-        # Try to query as via request
+    # Get current flow
+    flow = context.user_data.get("flow", "vias")  # Default to vias
+
+    # === FLOW: Consultar Vías ===
+    if flow == "vias":
+        query_province = matched_province or province
         _, _, via_sync_service = _get_services(context)
+
         if via_sync_service:
             try:
-                vias = await via_sync_service.get_vias_by_province(province)
-                if vias:
-                    lines = [f"🛣️ *Vías en {province}:*\n"]
-                    for via in vias[:15]:
-                        estado = via.get("estado_actual") or via.get("estado", "?")
-                        icono = "🟢" if estado.lower() in ("abierta", "a", "activa") else "🔴"
-                        obs = via.get("observaciones", "")
-                        obs_text = f"\n   _{obs}_" if obs else ""
-                        lines.append(f"{icono} {via['descripcion']} — *{estado}*{obs_text}")
-                    if len(vias) > 15:
-                        lines.append(f"\n_...y {len(vias) - 15} vías más_")
-                    await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=_main_menu_keyboard())
-                    return MENU
-            except Exception:
-                pass
+                vias = await via_sync_service.get_vias_by_province(query_province)
 
+                if vias:
+                    # Format as table-like output
+                    lines = [f"🛣️ *Estado de vías — {query_province.title()}*\n"]
+                    lines.append("```")
+                    lines.append(f"{'Vía':<35} {'Estado':<15}")
+                    lines.append("-" * 50)
+
+                    for via in vias[:20]:
+                        desc = via.get("descripcion", "?")
+                        estado = via.get("estado_actual") or via.get("estado", "?")
+                        icono = "🟢" if str(estado).lower() in ("abierta", "a", "activa") else "🔴"
+                        # Truncate long descriptions
+                        desc_short = desc[:32] + "..." if len(desc) > 32 else desc
+                        lines.append(f"{icono} {desc_short:<32} {estado}")
+
+                    lines.append("```")
+
+                    if len(vias) > 20:
+                        lines.append(f"_...y {len(vias) - 20} vías más_")
+
+                    # Show observations for flagged vias
+                    obs_lines = []
+                    for via in vias[:20]:
+                        obs = via.get("observaciones", "")
+                        if obs:
+                            obs_lines.append(f"• _{via.get('descripcion', '?')}_: {obs}")
+
+                    if obs_lines:
+                        lines.append("\n📝 *Observaciones:*")
+                        lines.extend(obs_lines[:5])
+
+                    await message.reply_text(
+                        "\n".join(lines),
+                        parse_mode="Markdown",
+                        reply_markup=_main_menu_keyboard(),
+                    )
+                else:
+                    await message.reply_text(
+                        f"No hay datos de vías para *{query_province}*.\n"
+                        "La DB puede no haber sincronizado aún.",
+                        parse_mode="Markdown",
+                        reply_markup=_main_menu_keyboard(),
+                    )
+            except Exception as exc:
+                LOGGER.error("Error querying vias: %s", exc)
+                await message.reply_text(
+                    "Error al consultar la base de datos.",
+                    reply_markup=_main_menu_keyboard(),
+                )
+        else:
+            await message.reply_text("Servicio de vías no disponible.", reply_markup=_main_menu_keyboard())
+
+        context.user_data.pop("flow", None)
+        return MENU
+
+    # === FLOW: Suscribirse ===
+    if not matched_province:
         await message.reply_text(
             f"No reconozco \"{province}\". Selecciona una provincia de la lista:",
             reply_markup=_provinces_keyboard(),
