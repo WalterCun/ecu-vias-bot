@@ -199,6 +199,7 @@ class ViaSyncService:
     async def get_vias_by_province(self, province: str) -> list[dict[str, Any]]:
         """Get all vias for a province from the database."""
         if not self._initialized:
+            LOGGER.warning("DB not initialized for get_vias_by_province")
             return []
 
         vias = await Via.filter(
@@ -218,6 +219,27 @@ class ViaSyncService:
             }
             for v in vias
         ]
+
+    async def get_vias_from_api(self, province: str, via_service: Any) -> list[dict[str, Any]]:
+        """Fallback: get vias directly from API via ViaService (no DB needed)."""
+        try:
+            vias_by_province = await via_service.get_latest_vias()
+            rows = vias_by_province.get(province.lower(), [])
+            return [
+                {
+                    "descripcion": row.get("descripcion", "?"),
+                    "estado": row.get("estado", "A"),
+                    "estado_actual": row.get("EstadoActual", {}).get("nombre", "?"),
+                    "observaciones": row.get("observaciones", ""),
+                    "provincia": row.get("Provincia", {}).get("descripcion", province),
+                    "canton": row.get("Canton", {}).get("descripcion", ""),
+                    "categoria": row.get("GroupDetail", {}).get("nombre", ""),
+                }
+                for row in rows
+            ]
+        except Exception as exc:
+            LOGGER.error("Error fetching vias from API: %s", exc)
+            return []
 
     async def get_all_provinces(self) -> list[str]:
         """Get list of all provinces in the database."""
