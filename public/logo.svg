@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#1a365d"/>
-      <stop offset="100%" style="stop-color:#2d5a87"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
     </linearGradient>
     <linearGradient id="road" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" style="stop-color:#f59e0b"/>
@@ -10,76 +10,96 @@
     </linearGradient>
   </defs>
 
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="250" fill="url(#bg)" stroke="#f59e0b" stroke-width="4"/>
+  <!-- Background -->
+  <rect width="640" height="360" fill="url(#bg)" rx="0"/>
 
-  <!-- Road/path -->
-  <path d="M 120 380 Q 180 300 256 280 Q 332 260 392 180"
-        stroke="url(#road)" stroke-width="18" fill="none"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 120 380 Q 180 300 256 280 Q 332 260 392 180"
-        stroke="#f59e0b" stroke-width="8" fill="none"
-        stroke-linecap="round" stroke-linejoin="round"
-        stroke-dasharray="4,16"/>
+  <!-- Decorative circles -->
+  <circle cx="580" cy="50" r="80" fill="#f59e0b" opacity="0.08"/>
+  <circle cx="60" cy="310" r="120" fill="#f59e0b" opacity="0.05"/>
 
-  <!-- Ecuador flag stripes at top -->
-  <rect x="156" y="60" width="200" height="8" rx="4" fill="#fdd017"/>
-  <rect x="156" y="72" width="200" height="8" rx="4" fill="#003893"/>
-  <rect x="156" y="84" width="200" height="8" rx="4" fill="#ce1126"/>
+  <!-- Ecuador flag bar -->
+  <rect x="0" y="0" width="640" height="6" fill="#fdd017"/>
+  <rect x="0" y="6" width="640" height="6" fill="#003893"/>
+  <rect x="0" y="12" width="640" height="6" fill="#ce1126"/>
 
-  <!-- Location pin -->
-  <g transform="translate(360, 130)">
-    <path d="M 25 0 C 11.2 0 0 11.2 0 25 C 0 44 25 65 25 65 C 25 65 50 44 50 25 C 50 11.2 38.8 0 25 0 Z"
+  <!-- Road graphic -->
+  <path d="M 0 280 Q 160 260 320 240 Q 480 220 640 200"
+        stroke="#f59e0b" stroke-width="12" fill="none"
+        stroke-linecap="round" opacity="0.3"/>
+  <path d="M 0 280 Q 160 260 320 240 Q 480 220 640 200"
+        stroke="#ffffff" stroke-width="2" fill="none"
+        stroke-linecap="round" stroke-dasharray="8,12" opacity="0.4"/>
+
+  <!-- Location pin icon -->
+  <g transform="translate(60, 100)">
+    <path d="M 30 0 C 13.4 0 0 13.4 0 30 C 0 52.5 30 75 30 75 C 30 75 60 52.5 60 30 C 60 13.4 46.6 0 30 0 Z"
           fill="#ef4444" stroke="#fff" stroke-width="2"/>
-    <circle cx="25" cy="22" r="10" fill="#fff"/>
+    <circle cx="30" cy="27" r="12" fill="#fff"/>
   </g>
 
-  <!-- Bot icon (gear) -->
-  <g transform="translate(80, 120)" opacity="0.6">
-    <circle cx="20" cy="20" r="8" fill="none" stroke="#fff" stroke-width="2"/>
-    <path d="M 20 4 L 20 8 M 20 32 L 20 36 M 4 20 L 8 20 M 32 20 L 36 20 M 8.7 8.7 L 11.5 11.5 M 28.5 28.5 L 31.3 31.3 M 31.3 8.7 L 28.5 11.5 M 11.5 28.5 L 8.7 31.3"
-          stroke="#fff" stroke-width="2"/>
-  </g>
-
-  <!-- Text: ECU -->
-  <text x="256" y="200" text-anchor="middle"
-        font-family="Georgia, serif" font-size="72" font-weight="bold"
-        fill="#f59e0b" stroke="#1a365d" stroke-width="1">
+  <!-- Main text -->
+  <text x="140" y="155" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#f59e0b">
+    ECU
+  </text>
+  <text x="140" y="155" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#f59e0b"
+        stroke="#1a365d" stroke-width="0.5" opacity="0.5">
     ECU
   </text>
 
-  <!-- Text: VÍAS -->
-  <text x="256" y="270" text-anchor="middle"
-        font-family="Georgia, serif" font-size="52" font-weight="bold"
-        fill="#ffffff">
+  <text x="310" y="155" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#ffffff">
     VÍAS
   </text>
 
   <!-- Subtitle -->
-  <text x="256" y="310" text-anchor="middle"
-        font-family="Arial, sans-serif" font-size="16"
-        fill="#94a3b8" letter-spacing="3">
+  <text x="140" y="195" font-family="Arial, sans-serif" font-size="15" fill="#94a3b8" letter-spacing="4">
     ESTADO DE VÍAS ECUADOR
   </text>
 
-  <!-- Bot badge -->
-  <rect x="195" y="340" width="122" height="28" rx="14" fill="#f59e0b"/>
-  <text x="256" y="359" text-anchor="middle"
-        font-family="Arial, sans-serif" font-size="14" font-weight="bold"
+  <!-- Description -->
+  <text x="140" y="235" font-family="Arial, sans-serif" font-size="14" fill="#cbd5e1">
+    Consulta en tiempo real el estado de las vías
+  </text>
+  <text x="140" y="258" font-family="Arial, sans-serif" font-size="14" fill="#cbd5e1">
+    de Ecuador. Suscríbete para recibir alertas
+  </text>
+  <text x="140" y="281" font-family="Arial, sans-serif" de font-size="14" fill="#cbd5e1">
+    de cambios en las rutas de tu interés.
+  </text>
+
+  <!-- CTA badge -->
+  <rect x="140" y="310" width="180" height="32" rx="16" fill="#f59e0b"/>
+  <text x="230" y="331" text-anchor="middle"
+        font-family="Arial, sans-serif" font-size="13" font-weight="bold"
         fill="#1a365d">
+    🛣️ CONSULTAR AHORA
+  </text>
+
+  <!-- Province list (right side) -->
+  <g transform="translate(400, 80)" font-family="Arial, sans-serif" font-size="11" fill="#94a3b8">
+    <text y="0">📍 Azuay</text>
+    <text y="22">📍 Bolívar</text>
+    <text y="44">📍 Cañar</text>
+    <text y="66">📍 Chimborazo</text>
+    <text y="88">📍 El Oro</text>
+    <text y="110">📍 Esmeraldas</text>
+    <text y="132">📍 Loja</text>
+    <text y="154">📍 Manabí</text>
+    <text y="176">📍 Morona Santiago</text>
+    <text y="198">📍 Napo</text>
+    <text y="220">📍 Y más...</text>
+  </g>
+
+  <!-- Bot badge -->
+  <rect x="500" y="310" width="130" height="32" rx="16" fill="rgba(255,255,255,0.1)" stroke="#f59e0b" stroke-width="1"/>
+  <text x="565" y="331" text-anchor="middle"
+        font-family="Arial, sans-serif" font-size="12" font-weight="bold"
+        fill="#f59e0b">
     TELEGRAM BOT
   </text>
 
-  <!-- Decorative dots -->
-  <circle cx="100" cy="420" r="4" fill="#f59e0b" opacity="0.4"/>
-  <circle cx="120" cy="430" r="3" fill="#f59e0b" opacity="0.3"/>
-  <circle cx="390" cy="420" r="4" fill="#f59e0b" opacity="0.4"/>
-  <circle cx="410" cy="430" r="3" fill="#f59e0b" opacity="0.3"/>
-
-  <!-- Version badge -->
-  <text x="256" y="480" text-anchor="middle"
-        font-family="Arial, sans-serif" font-size="11"
-        fill="#64748b">
+  <!-- Version -->
+  <text x="620" y="352" text-anchor="end"
+        font-family="Arial, sans-serif" font-size="10" fill="#64748b">
     v1.0.0
   </text>
 </svg>
