@@ -1,163 +1,125 @@
-"""Subscription domain service built on top of Redis JSON persistence."""
+"""Subscription service backed by SQLite (Tortoise ORM) instead of Redis."""
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
-from redis.exceptions import ConnectionError as RedisConnectionError
+from bot.db.models import Subscription
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SubscriptionService:
-    """Service layer for managing user province/time subscriptions."""
+    """Manage user province/time subscriptions via SQLite."""
 
     _TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
-    def __init__(self, persistence: Any):
-        """Initialize service with a persistence backend instance."""
-        self.persistence = persistence
+    def __init__(self, persistence: Any = None):
+        """persistence is kept for API compatibility but not used."""
+        self._persistence = persistence
 
     @staticmethod
     def _validate_province(province: str) -> str:
-        """Validate and normalize a province value."""
         if not isinstance(province, str):
-            raise ValueError("province must be a lowercase string")
-
-        normalized = province.strip()
-        if not normalized or normalized != normalized.lower():
-            raise ValueError("province must be lowercase")
-
+            raise ValueError("province must be a string")
+        normalized = province.strip().lower()
+        if not normalized:
+            raise ValueError("province must not be empty")
         return normalized
 
     @classmethod
     def _normalize_times(cls, times: list[str]) -> list[str]:
-        """Validate HH:MM format, deduplicate, and sort notification times."""
         if not isinstance(times, list):
             raise ValueError("times must be a list[str]")
-
         validated: set[str] = set()
         for value in times:
             if not isinstance(value, str):
                 raise ValueError("invalid time format")
             candidate = value.strip()
             if not cls._TIME_PATTERN.match(candidate):
-                raise ValueError("invalid time format")
+                raise ValueError(f"invalid time format: {candidate}")
             validated.add(candidate)
-
         return sorted(validated)
 
-    async def _get_user_data(self, user_id: int) -> dict:
-        """Fetch a single user's data using the persistence O(1) getter."""
-        try:
-            return await self.persistence.get_user_data_by_id(user_id)
-        except RedisConnectionError:
-            return {}
-
     async def subscribe(self, user_id: int, province: str, times: list[str]) -> dict:
-        """Subscribe a user to a province and one or more notification times."""
+        """Subscribe a user to a province and notification times."""
         normalized_province = self._validate_province(province)
         normalized_times = self._normalize_times(times)
 
-        user_data = await self._get_user_data(user_id)
-        subscriptions = user_data.get("subscriptions", {})
-        if not isinstance(subscriptions, dict):
-            subscriptions = {}
+        count = 0
+        for time_str in normalized_times:
+            _, created = await Subscription.get_or_create(
+                user_id=user_id,
+                province=normalized_province,
+                notify_time=time_str,
+                defaults={"active": True},
+            )
+            if not created:
+                # Reactivate if it was deactivated
+                sub = await Subscription.filter(
+                    user_id=user_id,
+                    province=normalized_province,
+                    notify_time=time_str,
+                ).first()
+                if sub and not sub.active:
+                    sub.active = True
+                    await sub.save()
+            count += 1
 
-        existing_times = subscriptions.get(normalized_province, [])
-        if not isinstance(existing_times, list):
-            existing_times = []
+        LOGGER.info("Subscribed user %s to %s at %s", user_id, normalized_province, normalized_times)
 
-        merged_times = sorted(set(existing_times) | set(normalized_times))
-        subscriptions[normalized_province] = merged_times
-
-        user_data["subscriptions"] = subscriptions
-        await self.persistence.update_user_data(user_id, user_data)
-
-        import logging
-        logging.getLogger("subscription").info(
-            "Subscribed user %s to %s at %s. Total subs: %d",
-            user_id, normalized_province, merged_times, len(subscriptions)
-        )
-
-        return user_data
+        # Return in same format as before
+        subs = await self.get_user_subscriptions(user_id)
+        return {"subscriptions": subs["subscriptions"]}
 
     async def unsubscribe(self, user_id: int, province: str | None = None) -> dict:
-        """Unsubscribe a user from one province or all provinces."""
-        user_data = await self._get_user_data(user_id)
-        subscriptions = user_data.get("subscriptions", {})
-        if not isinstance(subscriptions, dict):
-            subscriptions = {}
-
+        """Deactivate subscriptions for a user."""
         if province is None:
-            user_data["subscriptions"] = {}
-            await self.persistence.update_user_data(user_id, user_data)
-            return user_data
+            # Deactivate all
+            await Subscription.filter(user_id=user_id).update(active=False)
+            LOGGER.info("Deactivated all subscriptions for user %s", user_id)
+        else:
+            normalized = self._validate_province(province)
+            await Subscription.filter(
+                user_id=user_id,
+                province=normalized,
+            ).update(active=False)
+            LOGGER.info("Deactivated subscriptions for user %s province %s", user_id, normalized)
 
-        normalized_province = self._validate_province(province)
-        subscriptions.pop(normalized_province, None)
-        user_data["subscriptions"] = subscriptions
-
-        await self.persistence.update_user_data(user_id, user_data)
-        return user_data
+        subs = await self.get_user_subscriptions(user_id)
+        return {"subscriptions": subs["subscriptions"]}
 
     async def get_user_subscriptions(self, user_id: int) -> dict:
-        """Return user subscription mapping by province."""
-        user_data = await self._get_user_data(user_id)
+        """Return active subscriptions grouped by province."""
+        subs = await Subscription.filter(
+            user_id=user_id,
+            active=True,
+        ).all()
 
-        import logging
-        logging.getLogger("subscription").info(
-            "get_user_subscriptions for %s: raw data keys=%s",
-            user_id, list(user_data.keys()) if user_data else "empty"
-        )
+        grouped: dict[str, list[str]] = {}
+        for sub in subs:
+            if sub.province not in grouped:
+                grouped[sub.province] = []
+            if sub.notify_time not in grouped[sub.province]:
+                grouped[sub.province].append(sub.notify_time)
 
-        subscriptions = user_data.get("subscriptions", {})
+        # Sort times within each province
+        for province in grouped:
+            grouped[province] = sorted(set(grouped[province]))
 
-        if not isinstance(subscriptions, dict):
-            subscriptions = {}
-
-        normalized: dict[str, list[str]] = {}
-        for province, times in subscriptions.items():
-            if isinstance(province, str) and isinstance(times, list):
-                valid_times = [time for time in times if isinstance(time, str)]
-                normalized[province] = sorted(set(valid_times))
-
-        logging.getLogger("subscription").info(
-            "Returning subscriptions for %s: %s",
-            user_id, normalized
-        )
-
-        return {"subscriptions": normalized}
+        LOGGER.info("User %s subscriptions: %s", user_id, grouped)
+        return {"subscriptions": grouped}
 
     async def list_subscribers_by_province(self, province: str) -> list[int]:
-        """List user IDs subscribed to the given province.
+        """List user IDs subscribed to a province."""
+        normalized = self._validate_province(province)
+        subs = await Subscription.filter(
+            province=normalized,
+            active=True,
+        ).all()
 
-        Note:
-            This performs an O(n) scan via HGETALL because there is currently no
-            secondary province index.
-        """
-        normalized_province = self._validate_province(province)
-
-        try:
-            # TODO: Introduce a province -> user_ids secondary index to make this O(1)/O(log n).
-            raw_user_map = await self.persistence.redis.hgetall(self.persistence.USER_DATA_KEY)
-        except RedisConnectionError:
-            return []
-
-        subscribers: list[int] = []
-
-        for raw_user_id, payload in raw_user_map.items():
-            try:
-                user_id = int(raw_user_id)
-            except (TypeError, ValueError):
-                continue
-
-            data = self.persistence._deserialize(payload)
-            subscriptions = data.get("subscriptions", {}) if isinstance(data, dict) else {}
-            if not isinstance(subscriptions, dict):
-                continue
-
-            province_times = subscriptions.get(normalized_province)
-            if isinstance(province_times, list) and province_times:
-                subscribers.append(user_id)
-
-        return subscribers
+        user_ids = list({sub.user_id for sub in subs})
+        LOGGER.debug("Province %s has %d subscribers", normalized, len(user_ids))
+        return user_ids

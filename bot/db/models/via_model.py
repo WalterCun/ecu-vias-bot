@@ -151,3 +151,18 @@ class ViaAlterna(Model):
 
     class Meta:
         table = "via_alternas"
+
+
+class Subscription(Model):
+    """User subscription to a province for notifications."""
+
+    id = fields.IntField(pk=True, auto_increment=True)
+    user_id = fields.BigIntField(index=True)
+    province = fields.CharField(max_length=50, index=True)
+    notify_time = fields.CharField(max_length=10)  # HH:MM
+    active = fields.BooleanField(default=True)
+    created = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "subscriptions"
+        unique_together = (("user_id", "province", "notify_time"),)
