@@ -92,11 +92,12 @@ class ViaSyncService:
     async def _sync_single_via(self, row: dict[str, Any], now: datetime, stats: dict[str, int]) -> None:
         """Sync a single API row to the database."""
         # Extract nested data from API response
+        # API structure: { Provincia, Canton, Centro, EstadoActual, GroupDetail, ... }
         provincia_data = row.get("Provincia", {})
         canton_data = row.get("Canton", {})
         centro_data = row.get("Centro", {})
         estado_data = row.get("EstadoActual", {})
-        categoria_data = row.get("CategoriaVia", {})
+        group_detail = row.get("GroupDetail", {})  # NOT "CategoriaVia"
 
         provincia_name = provincia_data.get("descripcion", "").strip()
         via_desc = row.get("descripcion", "").strip()
@@ -108,7 +109,7 @@ class ViaSyncService:
         # Upsert related entities
         provincia, _ = await Provincia.get_or_create(
             descripcion=provincia_name,
-            defaults={"codigo": provincia_data.get("id")},
+            defaults={"codigo": provincia_data.get("codigo", "")},
         )
 
         canton_desc = canton_data.get("descripcion", "").strip()
@@ -119,7 +120,8 @@ class ViaSyncService:
                 provincia=provincia,
             )
 
-        centro_nombre = centro_data.get("descripcion", "").strip()
+        # API uses "nombre" not "descripcion" for Centro
+        centro_nombre = centro_data.get("nombre", "").strip()
         centro = None
         if centro_nombre:
             centro, _ = await Centro.get_or_create(
@@ -131,7 +133,8 @@ class ViaSyncService:
         if estado_nombre:
             estado_actual, _ = await EstadoActual.get_or_create(nombre=estado_nombre)
 
-        cat_nombre = categoria_data.get("descripcion", "").strip()
+        # API uses "GroupDetail" with "nombre" field, not "CategoriaVia"
+        cat_nombre = group_detail.get("nombre", "").strip()
         categoria = None
         if cat_nombre:
             categoria, _ = await CategoriaVia.get_or_create(nombre=cat_nombre)
@@ -177,18 +180,18 @@ class ViaSyncService:
             )
             stats["created"] += 1
 
-            # Handle alternate routes
+            # Handle alternate routes from DetalleViaAlterna
             alternas = row.get("DetalleViaAlterna", [])
             if isinstance(alternas, list):
                 for alterna in alternas:
                     alterna_via = alterna.get("Via", {})
                     alterna_desc = alterna_via.get("descripcion", "").strip()
                     if alterna_desc:
-                        alt_provincia_name = alterna_via.get("Provincia", {}).get("descripcion", provincia_name)
-                        alt_provincia, _ = await Provincia.get_or_create(descripcion=alt_provincia_name)
+                        # Via inside DetalleViaAlterna has provincia_id, not nested Provincia
+                        # Use the same province as the parent via
                         alt_via, _ = await Via.get_or_create(
                             descripcion=alterna_desc,
-                            provincia=alt_provincia,
+                            provincia=provincia,
                             defaults={"estado": "A", "created": now},
                         )
                         await ViaAlterna.create(via=via, via_alterna=alt_via, created=now)
