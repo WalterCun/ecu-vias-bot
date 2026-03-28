@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     BASE_DIR: Path = Path(__file__).parent.parent.parent
 
     # Fluid
-    LOCALES_PATH: Path = BASE_DIR / 'locale'
+    LOCALES_PATH: Path = BASE_DIR / 'locale'  # deprecated — kept for compatibility
 
     # States indexes for conversation handler
     MODERATOR: int = 0
