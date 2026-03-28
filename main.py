@@ -22,7 +22,27 @@ logger = logging.getLogger(__name__)
 
 def setup_logging() -> None:
     level = "DEBUG" if settings.DEBUG else "INFO"
-    logging.basicConfig(format="%(asctime)s %(levelname)s [%(name)s] %(message)s", level=level)
+    log_format = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+
+    # File logging if enabled
+    if settings.GENERATE_LOGS:
+        from pathlib import Path
+        logs_dir = Path("logs")
+        logs_dir.mkdir(exist_ok=True)
+
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = logs_dir / f"bot_{timestamp}.log"
+
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)  # File always gets DEBUG
+        handlers.append(file_handler)
+        print(f"Logging to: {log_file}")
+
+    logging.basicConfig(format=log_format, level=level, handlers=handlers)
+
     for lib in ("httpcore", "httpx", "telegram", "telegram.ext", "urllib3", "requests", "asyncio", "apscheduler"):
         logging.getLogger(lib).setLevel(logging.WARNING)
 

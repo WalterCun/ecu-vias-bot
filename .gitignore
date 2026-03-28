@@ -99,3 +99,6 @@ src/translations/*.json
 .idea/vcs.xml
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/inspectionProfiles/Project_Default.xml
+logs/
+ecuavias.db
+*.db
