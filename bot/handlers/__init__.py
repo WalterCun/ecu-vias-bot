@@ -1,14 +1,32 @@
-"""Telegram handlers registration for basic subscription and echo flows."""
+"""Telegram handlers registration with interactive menus and conversation flows."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters,
+)
 
+from bot.settings.const import PROVINCES
+
+# Conversation states
+MENU, SELECT_PROVINCE, SELECT_TIME = range(3)
 
 DEFAULT_SUBSCRIPTION_TIME = "08:00"
+
+# Time options for notification schedule
+TIME_OPTIONS = [
+    "06:00", "07:00", "08:00", "09:00", "10:00", "11:00",
+    "12:00", "13:00", "14:00", "15:00", "16:00", "17:00",
+    "18:00", "19:00", "20:00", "21:00", "22:00",
+]
 
 
 def _get_services(context: ContextTypes.DEFAULT_TYPE) -> tuple[Any, Any, Any]:
@@ -19,113 +37,168 @@ def _get_services(context: ContextTypes.DEFAULT_TYPE) -> tuple[Any, Any, Any]:
     return subscription_service, notification_engine, via_sync_service
 
 
-async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /start command with a health-style confirmation message."""
-    del context
-    if update.effective_message is None:
-        return
-    await update.effective_message.reply_text(
-        "🛣️ *Bot ECU Vías activo*\n\n"
-        "Comandos disponibles:\n"
-        "/vias <provincia> — Ver estado de vías\n"
-        "/subscribe <provincia> — Suscribirse a alertas\n"
-        "/unsubscribe <provincia> — Cancelar suscripción\n"
-        "/mysubscriptions — Ver mis suscripciones",
+def _main_menu_keyboard() -> ReplyKeyboardMarkup:
+    """Build the main menu keyboard."""
+    keyboard = [
+        [KeyboardButton("🛣️ Consultar Vías"), KeyboardButton("📋 Mis Suscripciones")],
+        [KeyboardButton("🔔 Suscribirse"), KeyboardButton("🔕 Cancelar Suscripción")],
+        [KeyboardButton("ℹ️ Ayuda")],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+
+def _provinces_keyboard() -> ReplyKeyboardMarkup:
+    """Build keyboard with Ecuador provinces."""
+    keyboard = []
+    row = []
+    for i, province in enumerate(PROVINCES):
+        row.append(KeyboardButton(province))
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([KeyboardButton("✅ Continuar"), KeyboardButton("🔙 Volver")])
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+
+def _time_keyboard() -> ReplyKeyboardMarkup:
+    """Build keyboard with time options."""
+    keyboard = []
+    row = []
+    for i, time_opt in enumerate(TIME_OPTIONS):
+        row.append(KeyboardButton(time_opt))
+        if len(row) == 4:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([KeyboardButton("✅ Confirmar"), KeyboardButton("🔙 Volver")])
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+
+# ============== Command Handlers ==============
+
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /start — show main menu."""
+    user = update.effective_user
+    message = update.effective_message
+    if message is None or user is None:
+        return MENU
+
+    name = user.first_name or "Usuario"
+    await message.reply_text(
+        f"🛣️ *¡Hola {name}! Bienvenido al Bot de Vías ECU*\n\n"
+        "¿Qué deseas hacer?",
         parse_mode="Markdown",
+        reply_markup=_main_menu_keyboard(),
     )
+    return MENU
 
 
-async def subscribe_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Subscribe user to a province using services from app context."""
+async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /help or Ayuda button."""
+    message = update.effective_message
+    if message is None:
+        return MENU
+
+    await message.reply_text(
+        "ℹ️ *Comandos disponibles:*\n\n"
+        "🛣️ *Consultar Vías* — Ver estado de vías por provincia\n"
+        "🔔 *Suscribirse* — Recibir alertas de vías\n"
+        "🔕 *Cancelar Suscripción* — Dejar de recibir alertas\n"
+        "📋 *Mis Suscripciones* — Ver tus suscripciones activas\n\n"
+        "También puedes usar comandos:\n"
+        "/start — Menú principal\n"
+        "/vias <provincia> — Consultar vías\n"
+        "/subscribe <provincia> — Suscribirse\n"
+        "/unsubscribe <provincia> — Cancelar\n"
+        "/mysubscriptions — Ver suscripciones",
+        parse_mode="Markdown",
+        reply_markup=_main_menu_keyboard(),
+    )
+    return MENU
+
+
+async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /vias or 'Consultar Vías' button."""
+    message = update.effective_message
+    if message is None:
+        return MENU
+
+    # If called with argument (e.g., /vias Azuay)
+    if context.args:
+        province = " ".join(context.args).strip()
+        _, _, via_sync_service = _get_services(context)
+        if via_sync_service:
+            try:
+                vias = await via_sync_service.get_vias_by_province(province)
+                if vias:
+                    lines = [f"🛣️ *Vías en {province}:*\n"]
+                    for via in vias[:15]:
+                        estado = via.get("estado_actual") or via.get("estado", "?")
+                        icono = "🟢" if estado.lower() in ("abierta", "a", "activa") else "🔴"
+                        obs = via.get("observaciones", "")
+                        obs_text = f"\n   _{obs}_" if obs else ""
+                        lines.append(f"{icono} {via['descripcion']} — *{estado}*{obs_text}")
+                    if len(vias) > 15:
+                        lines.append(f"\n_...y {len(vias) - 15} vías más_")
+                    await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=_main_menu_keyboard())
+                else:
+                    await message.reply_text(f"No hay vías para *{province}*. Usa el menú para seleccionar.", parse_mode="Markdown", reply_markup=_provinces_keyboard())
+            except Exception:
+                await message.reply_text("Error al consultar la base de datos.", reply_markup=_main_menu_keyboard())
+        else:
+            await message.reply_text("Servicio no disponible.", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    # Show provinces for selection
+    _, _, via_sync_service = _get_services(context)
+    if via_sync_service:
+        try:
+            provinces = await via_sync_service.get_all_provinces()
+            if provinces:
+                provinces_list = "\n".join(f"- {p}" for p in provinces[:20])
+                await message.reply_text(
+                    f"📍 *Provincias con datos:*\n{provinces_list}\n\n"
+                    "Escribe el nombre de la provincia o usa /vias <provincia>",
+                    parse_mode="Markdown",
+                    reply_markup=_provinces_keyboard(),
+                )
+                return SELECT_PROVINCE
+        except Exception:
+            pass
+
+    # Fallback: show all provinces
+    await message.reply_text(
+        "Selecciona una provincia para ver el estado de sus vías:",
+        reply_markup=_provinces_keyboard(),
+    )
+    return SELECT_PROVINCE
+
+
+async def mysubscriptions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /mysubscriptions or button."""
     message = update.effective_message
     user = update.effective_user
     if message is None or user is None:
-        return
+        return MENU
 
-    subscription_service, notification_engine, _ = _get_services(context)
-    del notification_engine
-
+    subscription_service, _, _ = _get_services(context)
     if subscription_service is None:
-        await message.reply_text("Servicio de suscripciones no disponible.")
-        return
-
-    if not context.args:
-        await message.reply_text("Uso: /subscribe <provincia>")
-        return
-
-    province = context.args[0].strip().lower()
-    if not province:
-        await message.reply_text("Provincia inválida.")
-        return
-
-    try:
-        await subscription_service.subscribe(user.id, province, [DEFAULT_SUBSCRIPTION_TIME])
-    except ValueError as exc:
-        await message.reply_text(f"Error de validación: {exc}")
-        return
-    except Exception:
-        await message.reply_text("No se pudo registrar la suscripción en este momento.")
-        return
-
-    await message.reply_text(f"✅ Suscripción registrada para *{province}*.", parse_mode="Markdown")
-
-
-async def unsubscribe_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Unsubscribe user from a province using services from app context."""
-    message = update.effective_message
-    user = update.effective_user
-    if message is None or user is None:
-        return
-
-    subscription_service, notification_engine, _ = _get_services(context)
-    del notification_engine
-
-    if subscription_service is None:
-        await message.reply_text("Servicio de suscripciones no disponible.")
-        return
-
-    if not context.args:
-        await message.reply_text("Uso: /unsubscribe <provincia>")
-        return
-
-    province = context.args[0].strip().lower()
-
-    try:
-        await subscription_service.unsubscribe(user.id, province)
-    except ValueError as exc:
-        await message.reply_text(f"Error de validación: {exc}")
-        return
-    except Exception:
-        await message.reply_text("No se pudo eliminar la suscripción en este momento.")
-        return
-
-    await message.reply_text(f"🗑️ Suscripción eliminada para *{province}*.", parse_mode="Markdown")
-
-
-async def mysubscriptions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Return the current user subscriptions list."""
-    message = update.effective_message
-    user = update.effective_user
-    if message is None or user is None:
-        return
-
-    subscription_service, notification_engine, _ = _get_services(context)
-    del notification_engine
-
-    if subscription_service is None:
-        await message.reply_text("Servicio de suscripciones no disponible.")
-        return
+        await message.reply_text("Servicio no disponible.", reply_markup=_main_menu_keyboard())
+        return MENU
 
     try:
         data = await subscription_service.get_user_subscriptions(user.id)
     except Exception:
-        await message.reply_text("No se pudieron obtener tus suscripciones.")
-        return
+        await message.reply_text("No se pudieron obtener tus suscripciones.", reply_markup=_main_menu_keyboard())
+        return MENU
 
     subscriptions = data.get("subscriptions", {}) if isinstance(data, dict) else {}
     if not subscriptions:
-        await message.reply_text("No tienes suscripciones activas.")
-        return
+        await message.reply_text("No tienes suscripciones activas.", reply_markup=_main_menu_keyboard())
+        return MENU
 
     lines = ["📋 *Tus suscripciones:*"]
     for province, times in subscriptions.items():
@@ -134,87 +207,335 @@ async def mysubscriptions_handler(update: Update, context: ContextTypes.DEFAULT_
         else:
             lines.append(f"- {province}")
 
-    await message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=_main_menu_keyboard())
+    return MENU
 
 
-async def vias_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Query road status from the database for a given province."""
+async def subscribe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /subscribe or 'Suscribirse' button — show provinces."""
     message = update.effective_message
     if message is None:
-        return
+        return MENU
 
-    _, _, via_sync_service = _get_services(context)
+    # If called with argument (e.g., /subscribe azuay)
+    if context.args:
+        province = context.args[0].strip().lower()
+        subscription_service, _, _ = _get_services(context)
+        if subscription_service:
+            try:
+                await subscription_service.subscribe(update.effective_user.id, province, [DEFAULT_SUBSCRIPTION_TIME])
+                await message.reply_text(
+                    f"✅ Suscrito a *{province}* (notificaciones a las {DEFAULT_SUBSCRIPTION_TIME})",
+                    parse_mode="Markdown",
+                    reply_markup=_main_menu_keyboard(),
+                )
+            except ValueError as exc:
+                await message.reply_text(f"Error: {exc}", reply_markup=_main_menu_keyboard())
+            except Exception:
+                await message.reply_text("No se pudo registrar la suscripción.", reply_markup=_main_menu_keyboard())
+        return MENU
 
-    if via_sync_service is None:
-        await message.reply_text("Servicio de vías no disponible.")
-        return
+    # Store selected provinces in context
+    context.user_data["subscribe_provinces"] = []
+    await message.reply_text(
+        "🔔 *Suscribirse a alertas de vías*\n\n"
+        "Selecciona las provincias que te interesan.\n"
+        "Presiona ✅ Continuar cuando termines.",
+        parse_mode="Markdown",
+        reply_markup=_provinces_keyboard(),
+    )
+    return SELECT_PROVINCE
 
-    if not context.args:
-        # Show available provinces
+
+async def unsubscribe_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /unsubscribe or 'Cancelar Suscripción' button."""
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return MENU
+
+    subscription_service, _, _ = _get_services(context)
+    if subscription_service is None:
+        await message.reply_text("Servicio no disponible.", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    if context.args:
+        province = context.args[0].strip().lower()
         try:
-            provinces = await via_sync_service.get_all_provinces()
+            await subscription_service.unsubscribe(user.id, province)
+            await message.reply_text(
+                f"🗑️ Suscripción cancelada para *{province}*",
+                parse_mode="Markdown",
+                reply_markup=_main_menu_keyboard(),
+            )
         except Exception:
-            await message.reply_text("No se pudieron obtener las provincias.")
-            return
+            await message.reply_text("Error al cancelar suscripción.", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    # Show current subscriptions for cancellation
+    try:
+        data = await subscription_service.get_user_subscriptions(user.id)
+        subscriptions = data.get("subscriptions", {}) if isinstance(data, dict) else {}
+        if not subscriptions:
+            await message.reply_text("No tienes suscripciones activas.", reply_markup=_main_menu_keyboard())
+            return MENU
+
+        # Build keyboard with subscribed provinces
+        keyboard = []
+        row = []
+        for i, province in enumerate(subscriptions.keys()):
+            row.append(KeyboardButton(f"🗑️ {province}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([KeyboardButton("🔙 Volver")])
+
+        await message.reply_text(
+            "🔕 *Cancelar suscripción*\n\nSelecciona la provincia:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+        )
+        return SELECT_PROVINCE
+    except Exception:
+        await message.reply_text("Error al obtener suscripciones.", reply_markup=_main_menu_keyboard())
+        return MENU
+
+
+# ============== State Handlers ==============
+
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle main menu button presses."""
+    message = update.effective_message
+    text = message.text if message else ""
+
+    if "Consultar Vías" in text or "vias" in text.lower():
+        return await vias_handler(update, context)
+    elif "Mis Suscripciones" in text or "subscriptions" in text.lower():
+        return await mysubscriptions_handler(update, context)
+    elif "Suscribirse" in text or "subscribe" in text.lower():
+        return await subscribe_start(update, context)
+    elif "Cancelar" in text or "unsubscribe" in text.lower():
+        return await unsubscribe_handler(update, context)
+    elif "Ayuda" in text or "help" in text.lower():
+        return await help_handler(update, context)
+    else:
+        await message.reply_text(
+            "Selecciona una opción del menú:",
+            reply_markup=_main_menu_keyboard(),
+        )
+        return MENU
+
+
+async def province_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle province selection for subscription or via query."""
+    message = update.effective_message
+    user = update.effective_user
+    text = message.text if message else ""
+
+    if message is None or user is None:
+        return SELECT_PROVINCE
+
+    # Handle navigation
+    if text == "✅ Continuar":
+        provinces = context.user_data.get("subscribe_provinces", [])
+        if not provinces:
+            await message.reply_text("No seleccionaste ninguna provincia.", reply_markup=_main_menu_keyboard())
+            return MENU
+
+        # Show time selection
+        await message.reply_text(
+            f"🕐 *Horarios de notificación*\n\n"
+            f"Provincias: {', '.join(provinces)}\n\n"
+            "Selecciona la hora en que quieres recibir notificaciones:",
+            parse_mode="Markdown",
+            reply_markup=_time_keyboard(),
+        )
+        return SELECT_TIME
+
+    if text == "🔙 Volver" or text == "Volver":
+        await message.reply_text("Menú principal:", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    # Handle unsubscription (text starts with 🗑️)
+    if text.startswith("🗑️"):
+        province = text.replace("🗑️ ", "").strip().lower()
+        subscription_service, _, _ = _get_services(context)
+        if subscription_service:
+            try:
+                await subscription_service.unsubscribe(user.id, province)
+                await message.reply_text(
+                    f"🗑️ Suscripción cancelada para *{province}*",
+                    parse_mode="Markdown",
+                    reply_markup=_main_menu_keyboard(),
+                )
+            except Exception:
+                await message.reply_text("Error al cancelar.", reply_markup=_main_menu_keyboard())
+        return MENU
+
+    # Check if it's a province name
+    province = text.strip()
+    province_lower = province.lower()
+
+    # Check against known provinces (case-insensitive)
+    matched_province = None
+    for p in PROVINCES:
+        if p.lower() == province_lower:
+            matched_province = p
+            break
+
+    if not matched_province:
+        # Try to query as via request
+        _, _, via_sync_service = _get_services(context)
+        if via_sync_service:
+            try:
+                vias = await via_sync_service.get_vias_by_province(province)
+                if vias:
+                    lines = [f"🛣️ *Vías en {province}:*\n"]
+                    for via in vias[:15]:
+                        estado = via.get("estado_actual") or via.get("estado", "?")
+                        icono = "🟢" if estado.lower() in ("abierta", "a", "activa") else "🔴"
+                        obs = via.get("observaciones", "")
+                        obs_text = f"\n   _{obs}_" if obs else ""
+                        lines.append(f"{icono} {via['descripcion']} — *{estado}*{obs_text}")
+                    if len(vias) > 15:
+                        lines.append(f"\n_...y {len(vias) - 15} vías más_")
+                    await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=_main_menu_keyboard())
+                    return MENU
+            except Exception:
+                pass
+
+        await message.reply_text(
+            f"No reconozco \"{province}\". Selecciona una provincia de la lista:",
+            reply_markup=_provinces_keyboard(),
+        )
+        return SELECT_PROVINCE
+
+    # Add to subscription list
+    selected = context.user_data.get("subscribe_provinces", [])
+    if matched_province not in selected:
+        selected.append(matched_province)
+        context.user_data["subscribe_provinces"] = selected
+
+    await message.reply_text(
+        f"✅ *{matched_province}* seleccionada.\n"
+        f"Seleccionadas: {', '.join(selected)}\n\n"
+        "Selecciona más provincias o presiona ✅ Continuar.",
+        parse_mode="Markdown",
+        reply_markup=_provinces_keyboard(),
+    )
+    return SELECT_PROVINCE
+
+
+async def time_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle time selection for subscription."""
+    message = update.effective_message
+    user = update.effective_user
+    text = message.text if message else ""
+
+    if message is None or user is None:
+        return SELECT_TIME
+
+    if text == "🔙 Volver":
+        await message.reply_text("Selecciona provincias:", reply_markup=_provinces_keyboard())
+        return SELECT_PROVINCE
+
+    if text == "✅ Confirmar":
+        provinces = context.user_data.get("subscribe_provinces", [])
+        times = context.user_data.get("subscribe_times", [DEFAULT_SUBSCRIPTION_TIME])
 
         if not provinces:
-            await message.reply_text("No hay datos de vías en la base de datos aún.")
-            return
+            await message.reply_text("No hay provincias seleccionadas.", reply_markup=_main_menu_keyboard())
+            return MENU
 
-        provinces_list = "\n".join(f"- {p}" for p in provinces)
+        subscription_service, _, _ = _get_services(context)
+        if subscription_service:
+            results = []
+            for province in provinces:
+                try:
+                    await subscription_service.subscribe(user.id, province.lower(), times)
+                    results.append(f"✅ {province}")
+                except Exception:
+                    results.append(f"❌ {province}")
+
+            context.user_data.pop("subscribe_provinces", None)
+            context.user_data.pop("subscribe_times", None)
+
+            await message.reply_text(
+                "🔔 *Resultado de suscripciones:*\n\n" + "\n".join(results) +
+                f"\n\nHorario: {', '.join(times)}",
+                parse_mode="Markdown",
+                reply_markup=_main_menu_keyboard(),
+            )
+        return MENU
+
+    # Check if it's a time
+    if text in TIME_OPTIONS:
+        context.user_data["subscribe_times"] = [text]
         await message.reply_text(
-            f"📍 *Provincias disponibles:*\n{provinces_list}\n\nUsa: /vias <provincia>",
+            f"🕐 Hora seleccionada: *{text}*\n\n"
+            "Presiona ✅ Confirmar para guardar.",
             parse_mode="Markdown",
+            reply_markup=_time_keyboard(),
         )
-        return
+        return SELECT_TIME
 
-    province = " ".join(context.args).strip()
-
-    try:
-        vias = await via_sync_service.get_vias_by_province(province)
-    except Exception:
-        await message.reply_text("Error al consultar la base de datos.")
-        return
-
-    if not vias:
-        await message.reply_text(f"No se encontraron vías para *{province}*.", parse_mode="Markdown")
-        return
-
-    lines = [f"🛣️ *Vías en {province}:*\n"]
-    for via in vias[:20]:  # Limit to 20 results
-        estado = via.get("estado_actual") or via.get("estado", "?")
-        icono = "🟢" if estado.lower() in ("abierta", "a", "activa") else "🔴"
-        obs = via.get("observaciones", "")
-        obs_text = f"\n   _{obs}_" if obs else ""
-        lines.append(f"{icono} {via['descripcion']} — *{estado}*{obs_text}")
-
-    if len(vias) > 20:
-        lines.append(f"\n_...y {len(vias) - 20} vías más_")
-
-    await message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await message.reply_text("Selecciona una hora válida:", reply_markup=_time_keyboard())
+    return SELECT_TIME
 
 
-async def echo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Echo plain text messages back to the user."""
+async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /cancel — return to main menu."""
     del context
     message = update.effective_message
-    if message is None:
-        return
-    await message.reply_text(message.text or "")
+    if message:
+        await message.reply_text("Operación cancelada.", reply_markup=_main_menu_keyboard())
+    return MENU
+
+
+async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle unrecognized input in any state."""
+    del context
+    message = update.effective_message
+    if message:
+        await message.reply_text(
+            "No entendí eso. Usa el menú o escribe /start para comenzar.",
+            reply_markup=_main_menu_keyboard(),
+        )
+    return MENU
 
 
 def register_handlers(application: Application) -> None:
-    """Register core command and message handlers on the application."""
-    # User commands
-    application.add_handler(CommandHandler("start", start_handler))
-    application.add_handler(CommandHandler("vias", vias_handler))
-    application.add_handler(CommandHandler("subscribe", subscribe_handler))
-    application.add_handler(CommandHandler("unsubscribe", unsubscribe_handler))
-    application.add_handler(CommandHandler("mysubscriptions", mysubscriptions_handler))
+    """Register conversation handlers with interactive menus."""
+    # Conversation handler for interactive flows
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("start", start_handler),
+            CommandHandler("help", help_handler),
+            CommandHandler("vias", vias_handler),
+            CommandHandler("subscribe", subscribe_start),
+            CommandHandler("unsubscribe", unsubscribe_handler),
+            CommandHandler("mysubscriptions", mysubscriptions_handler),
+        ],
+        states={
+            MENU: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler),
+            ],
+            SELECT_PROVINCE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, province_selected),
+            ],
+            SELECT_TIME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, time_selected),
+            ],
+        },
+        fallbacks=[
+            CommandHandler("start", start_handler),
+            CommandHandler("cancel", cancel_handler),
+            MessageHandler(filters.ALL, fallback_handler),
+        ],
+        name="main_conversation",
+        persistent=False,
+    )
 
-    # Admin commands
-    from bot.handlers.admin import register_admin_handlers
-    register_admin_handlers(application)
-
-    # Echo (fallback)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_handler))
+    application.add_handler(conv_handler)
