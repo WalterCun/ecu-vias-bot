@@ -28,7 +28,7 @@ TORTOISE_CONFIG = {
     },
     "apps": {
         "models": {
-            "models": ["bot.db.models", "aerich.models"],
+            "models": ["bot.db.models"],
             "default_connection": "default",
         }
     },
