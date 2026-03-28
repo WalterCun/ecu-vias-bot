@@ -3,25 +3,28 @@
 from __future__ import annotations
 
 import logging
-import os
 from functools import wraps
 from typing import Any, Callable
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes, Application
 
+from bot.settings import settings
+
 LOGGER = logging.getLogger(__name__)
 
-# Admin IDs from env var: comma-separated list of Telegram user IDs
-# e.g., ADMIN_IDS=123456789,987654321
+# Admin IDs from settings (comma-separated in ADMIN_IDS env var)
 def _load_admin_ids() -> set[int]:
-    """Load admin IDs from ADMIN_IDS environment variable."""
-    raw = os.getenv("ADMIN_IDS", "")
+    """Load admin IDs from settings.ADMIN_IDS."""
+    raw = settings.ADMIN_IDS
     ids: set[int] = set()
     for part in raw.split(","):
         part = part.strip()
         if part.isdigit():
             ids.add(int(part))
+    # Also add legacy ID_ADMIN if set
+    if settings.ID_ADMIN:
+        ids.add(settings.ID_ADMIN)
     return ids
 
 
