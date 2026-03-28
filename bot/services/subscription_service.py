@@ -72,6 +72,13 @@ class SubscriptionService:
 
         user_data["subscriptions"] = subscriptions
         await self.persistence.update_user_data(user_id, user_data)
+
+        import logging
+        logging.getLogger("subscription").info(
+            "Subscribed user %s to %s at %s. Total subs: %d",
+            user_id, normalized_province, merged_times, len(subscriptions)
+        )
+
         return user_data
 
     async def unsubscribe(self, user_id: int, province: str | None = None) -> dict:
@@ -96,6 +103,13 @@ class SubscriptionService:
     async def get_user_subscriptions(self, user_id: int) -> dict:
         """Return user subscription mapping by province."""
         user_data = await self._get_user_data(user_id)
+
+        import logging
+        logging.getLogger("subscription").info(
+            "get_user_subscriptions for %s: raw data keys=%s",
+            user_id, list(user_data.keys()) if user_data else "empty"
+        )
+
         subscriptions = user_data.get("subscriptions", {})
 
         if not isinstance(subscriptions, dict):
@@ -106,6 +120,11 @@ class SubscriptionService:
             if isinstance(province, str) and isinstance(times, list):
                 valid_times = [time for time in times if isinstance(time, str)]
                 normalized[province] = sorted(set(valid_times))
+
+        logging.getLogger("subscription").info(
+            "Returning subscriptions for %s: %s",
+            user_id, normalized
+        )
 
         return {"subscriptions": normalized}
 
