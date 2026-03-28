@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Admin IDs (comma-separated Telegram user IDs)
     ADMIN_IDS: str = ""
 
+    # File logging
+    GENERATE_LOGS: bool = False
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
