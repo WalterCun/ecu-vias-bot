@@ -21,7 +21,7 @@ class ViasEcuadorAPI:
 
     def __init__(self):
         # https://ecu911.gob.ec/Services/WSVias/ViasWeb.php?estado=A&and:%3C%3E:EstadoActual-id=593&order=Provincia-descripcion&limit=200&start=0
-        self.url = settings.URL_SCRAPPING_WEB + '/Services/WSVias/ViasWeb.php#'
+        self.url = settings.URL_SCRAPPING_WEB + '/Services/WSVias/ViasWeb.php?estado=A&and:%3C%3E:EstadoActual-id=593&order=Provincia-descripcion&limit=200&start=0'
 
         # self.session.verify = self.CERT_PATH
 
