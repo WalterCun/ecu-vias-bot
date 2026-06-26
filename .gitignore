@@ -102,3 +102,6 @@ src/translations/*.json
 logs/
 ecuavias.db
 *.db
+*.lock
+.repomixignore
+repomix.config.json
